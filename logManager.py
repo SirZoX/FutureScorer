@@ -6,6 +6,7 @@ import inspect
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from gvars import configFile, logsFolder
+from connector import loadConfig
 
 # ——— Configuración de Telegram ———
 
@@ -16,8 +17,7 @@ from gvars import configFile, logsFolder
 # _telegramToken = _cfg.get('telegramTextToken')
 # _telegramChatId = _cfg.get('telegramChatId')
 # _telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)
-with open(configFile, encoding='utf-8') as f:
-    _cfg = json.load(f)
+_cfg = loadConfig()
 _telegramToken = _cfg.get('telegramToken')
 _telegramChatId = _cfg.get('telegramChatId')
 _telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)

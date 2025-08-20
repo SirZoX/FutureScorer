@@ -25,6 +25,7 @@ import helpers
 import pairs
 
 from logManager import messages
+from connector import loadConfig
 
 
 
@@ -48,9 +49,7 @@ orderManager = orderManager.OrderManager()
 
 
 
-# ——— Load configuration ———
-with open(gvars.configFile, encoding='utf-8') as f:
-    configData = json.load(f)
+configData = loadConfig()
 
 # topPercent   = configData.get('topPercent', 10)
 # limit        = configData.get('limit', 150)

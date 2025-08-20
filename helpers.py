@@ -28,12 +28,12 @@ import requests
 import json
 import gvars
 from logManager import messages
+from connector import loadConfig
 
 
 
 
-with open(gvars.configFile, encoding='utf-8') as f:
-    configData = json.load(f)
+configData = loadConfig()
 
 
 

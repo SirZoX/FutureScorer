@@ -2,7 +2,7 @@ import threading
 import json
 import time
 import ccxt
-from connector import bingxConnector
+from connector import bingxConnector, loadConfig
 import pandas as pd
 
 
@@ -105,8 +105,7 @@ def analyzePairs():
     dateTag = datetime.utcnow().date().isoformat()
 
     # Leer config en caliente
-    with open(gvars.configFile, encoding='utf-8') as f:
-        configData = json.load(f)
+    configData = loadConfig()
 
     # Core parameters
     # topPercent   = configData.get('topPercent', 10)

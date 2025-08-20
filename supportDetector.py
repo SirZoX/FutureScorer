@@ -3,11 +3,10 @@
 import json
 import numpy as np
 from gvars import configFile
+from connector import loadConfig
 
 
-# Load config
-with open(configFile) as cfgFile:
-    cfg = json.load(cfgFile)
+cfg = loadConfig()
 tolerancePct = cfg['tolerancePct']
 # bouncePct = cfg['bouncePct']
 bouncePct = cfg['minPctBounceAllowed']

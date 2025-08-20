@@ -15,9 +15,9 @@ def manageDynamicTpSl():
     except Exception as e:
         messages(f"[DYN-TP/SL] Error loading positions: {e}", console=1, log=1, telegram=1)
         return
+    from connector import loadConfig
     try:
-        with open(configFile, encoding='utf-8') as f:
-            config = json.load(f)
+        config = loadConfig()
     except Exception as e:
         messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         return

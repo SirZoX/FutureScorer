@@ -5,14 +5,9 @@ import ccxt
 from connector import bingxConnector
 import time
 from gvars import configFile, configFolder, marketsFile
+from connector import loadConfig
 
-# Load API credentials and initialize exchange
-with open(configFile, "r", encoding="utf-8") as f:
-    config = json.load(f)
-
-
-api_key = config.get('apikey') or config.get('apiKey')
-api_secret = config.get('apisecret') or config.get('apiSecret')
+config = loadConfig()
 exchange = bingxConnector()
 
 
