@@ -311,7 +311,7 @@ class OrderManager:
 
 
 
-    def openPosition(self, symbol, slope=None, intercept=None, investmentPct=1.0):
+    def openPosition(self, symbol, slope=None, intercept=None, investmentPct=1.0, side='long'):
         """
         Market buy with CCXT, then place OCO sell (TP + SL) with python-binance.
         Never open more than one trade for the same symbol per run.
@@ -377,15 +377,32 @@ class OrderManager:
         amount = float(amtDec)
         messages(f"  ➡️   Opening {symbol}: price={price}, amount={amtDec}", pair=symbol, console=1, log=1, telegram=0)
 
-        # 5) Place market buy
+        # 5) Place futures order (long/short)
         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
+        leverage = int(self.config.get('leverage', 10))
+        orderSide = 'buy' if side == 'long' else 'sell'
+        positionSide = 'LONG' if side == 'long' else 'SHORT'
         try:
-            buyResp   = self.exchange.create_market_buy_order(symbol, amount, params={'newClientOrderId': clientId})
-            filled    = Decimal(str(buyResp.get('filled') or 0))
-            openPrice = Decimal(str(buyResp.get('price') or price))
-            messages(f"  ➡️   Buy executed for {symbol}: filled={filled}, price={openPrice}", pair=symbol, console=1, log=1, telegram=0)
+            # Set leverage for symbol
+            self.exchange.set_leverage(leverage, symbol)
+            # Operativa spot (comentada)
+            # buyResp = self.exchange.create_market_buy_order(symbol, amount, params={'newClientOrderId': clientId})
+            # Operativa futuros
+            orderResp = self.exchange.create_order(
+                symbol=symbol,
+                type='market',
+                side=orderSide,
+                amount=amount,
+                params={
+                    'positionSide': positionSide,
+                    'newClientOrderId': clientId
+                }
+            )
+            filled    = Decimal(str(orderResp.get('filled') or orderResp.get('amount') or 0))
+            openPrice = Decimal(str(orderResp.get('price') or price))
+            messages(f"  ➡️   Futures order executed for {symbol}: side={side}, filled={filled}, price={openPrice}, leverage={leverage}", pair=symbol, console=1, log=1, telegram=0)
         except Exception as e:
-            messages(f"Error executing market buy for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
+            messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
             return None
 
         # 6) Calculate TP/SL
