@@ -6,6 +6,7 @@ def manageDynamicTpSl():
     - Logs all relevant events and errors. Sends Telegram alert if OCO cannot be placed.
     """
     import ccxt
+    from connector import bingxConnector
     from logManager import messages
     from gvars import positionsFile, configFile
     try:
@@ -20,11 +21,7 @@ def manageDynamicTpSl():
     except Exception as e:
         messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         return
-    exchange = ccxt.binance({
-        "apiKey": config.get("apiKey"),
-        "secret": config.get("apiSecret"),
-        "enableRateLimit": True
-    })
+    exchange = bingxConnector()
     for symbol, pos in positions.items():
         try:
             openPrice = float(pos.get('openPrice', 0))

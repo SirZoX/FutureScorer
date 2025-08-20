@@ -2,6 +2,7 @@
 import os
 import json
 import ccxt
+from connector import bingxConnector
 import time
 from gvars import configFile, configFolder, marketsFile
 
@@ -12,12 +13,7 @@ with open(configFile, "r", encoding="utf-8") as f:
 
 api_key = config.get('apikey') or config.get('apiKey')
 api_secret = config.get('apisecret') or config.get('apiSecret')
-exchange = ccxt.binance({
-    'apiKey': api_key,
-    'secret': api_secret,
-    'enableRateLimit': True,
-    'options': {'defaultType': 'spot'}
-})
+exchange = bingxConnector()
 
 
 

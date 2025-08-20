@@ -1,5 +1,6 @@
 import json
 import ccxt
+from connector import bingxConnector
 
 
 def fetch_market_info():
@@ -10,13 +11,8 @@ def fetch_market_info():
     api_key = config.get('apikey') or config.get('apiKey')
     api_secret = config.get('apisecret') or config.get('apiSecret')
 
-    # Initialize Binance exchange
-    exchange = ccxt.binance({
-        'apiKey': api_key,
-        'secret': api_secret,
-    })
-
-    # Prompt user for base symbol
+    # Initialize BingX Futures exchange
+    exchange = bingxConnector()
     base = input("Introduce el símbolo base (p.ej. 'ray'): ")
     symbol = f"{base.strip().upper()}/USDC"
 

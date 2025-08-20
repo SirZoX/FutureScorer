@@ -1,4 +1,5 @@
 import ccxt
+from connector import bingxConnector
 import json
 import os
 import csv
@@ -10,8 +11,7 @@ from plotting import savePlot
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
-from binance.client import Client as BinanceClient
-from binance.enums import SIDE_SELL, TIME_IN_FORCE_GTC
+## Eliminada dependencia de python-binance, ahora se usa BingX
 from zoneinfo import ZoneInfo
 
 
@@ -31,23 +31,10 @@ class OrderManager:
 
         # Initialize CCXT exchange
         try:
-            self.exchange = ccxt.binance({
-                "apiKey": self.config.get("apiKey"),
-                "secret": self.config.get("apiSecret"),
-                "enableRateLimit": True
-            })
+            self.exchange = bingxConnector()
         except Exception as e:
-            messages(f"Error initializing CCXT: {e}", console=1, log=1, telegram=0)
+            messages(f"Error initializing BingX connector: {e}", console=1, log=1, telegram=0)
             self.exchange = None
-
-        # Initialize python-binance client for OCO orders
-        try:
-            self.binanceClient = BinanceClient(
-                self.config.get("apiKey"), self.config.get("apiSecret")
-            )
-        except Exception as e:
-            messages(f"Error initializing python-binance client: {e}", console=1, log=1, telegram=0)
-            self.binanceClient = None
 
         # Load markets data once
         try:
@@ -435,82 +422,16 @@ class OrderManager:
         #     belowType = 'LIMIT'  # Default fallback
         # 7) Place OCO sell
         tpId, slId = None, None
-        # Define binSym for OCO usage
-        binSym = symbol.replace('/', '')
         # Log all OCO parameters before placing the order
         messages(
-            f"[DEBUG] OCO params for {symbol}: binSym={binSym}, quantity={float(filled)}, price={tpPrice}, stopPrice={slPrice}, stopLimitPrice={slLimit}, timeInForce={TIME_IN_FORCE_GTC}",
+            f"[DEBUG] OCO params for {symbol}: quantity={float(filled)}, price={tpPrice}, stopPrice={slPrice}, stopLimitPrice={slLimit}",
             pair=symbol, console=0, log=1, telegram=0
         )
         try:
-            import requests
-            import time
-            import hmac
-            import hashlib
-            # Define headers for Binance API authentication
-            api_key = self.config.get('apiKey')
-            headers = {'X-MBX-APIKEY': api_key}
-            # Calcular los tipos correctos para aboveType y belowType
-            # Para SELL, arriba es TP (LIMIT_MAKER), abajo es SL (STOP_LOSS_LIMIT)
-            aboveType = 'LIMIT_MAKER'
-            belowType = 'STOP_LOSS_LIMIT'
-            endpoint = 'https://api.binance.com/api/v3/orderList/oco'
-            timestamp = int(time.time() * 1000)
-            params = {
-                'symbol': binSym,
-                'side': 'SELL',
-                'quantity': str(filled),
-                'aboveType': aboveType,
-                'abovePrice': str(tpPrice),
-                # Solo enviar aboveTimeInForce si el tipo lo requiere
-                # 'aboveTimeInForce': 'GTC',
-                'belowType': belowType,
-                'belowPrice': str(slLimit),
-                'belowStopPrice': str(slPrice),
-                'belowTimeInForce': 'GTC',
-                'timestamp': timestamp
-            }
-            # Agregar aboveTimeInForce solo si aboveType lo requiere
-            if aboveType in ['STOP_LOSS_LIMIT', 'TAKE_PROFIT_LIMIT']:
-                params['aboveTimeInForce'] = 'GTC'
-            # Construir la query string para la firma
-            api_key = self.config.get('apiKey')
-            api_secret = self.config.get('apiSecret')
-            query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-            signature = hmac.new(api_secret.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-            params['signature'] = signature
-            messages(f"[OCO-DEBUG] Llamada manual OCO: {params}", pair=symbol, console=0, log=1, telegram=0)
-            try:
-                response = requests.post(endpoint, params=params, headers=headers)
-                messages(f"OCO response status: {response.status_code}", pair=symbol, console=0, log=1, telegram=0)
-                messages(f"OCO response: {response.text}", pair=symbol, console=0, log=1, telegram=0)
-                if response.status_code == 200:
-                    oco = response.json()
-                    # Buscar los orderId en la respuesta (nuevo formato)
-                    tpId = None
-                    slId = None
-                    for rpt in oco.get('orderReports', []):
-                        # LIMIT_MAKER es TP, STOP_LOSS_LIMIT es SL
-                        if rpt.get('type') == 'LIMIT_MAKER':
-                            tpId = rpt.get('orderId')
-                        elif rpt.get('type') == 'STOP_LOSS_LIMIT':
-                            slId = rpt.get('orderId')
-                    # Si no se encuentran, intentar por 'LIMIT' y 'STOP_LOSS' (compatibilidad)
-                    if tpId is None:
-                        for rpt in oco.get('orderReports', []):
-                            if rpt.get('type') == 'LIMIT':
-                                tpId = rpt.get('orderId')
-                    if slId is None:
-                        for rpt in oco.get('orderReports', []):
-                            if rpt.get('type') == 'STOP_LOSS':
-                                slId = rpt.get('orderId')
-                    # Validar que ambos IDs se obtuvieron
-                    if tpId is None or slId is None:
-                        messages(f"[ERROR] No se pudieron extraer los orderId TP/SL del response OCO: {oco}", pair=symbol, console=1, log=1, telegram=1)
-                else:
-                    messages(f"❌ Error placing OCO (manual endpoint): {response.text}", pair=symbol, console=1, log=1, telegram=0)
-            except Exception as e:
-                messages(f"❌ Error en la llamada manual OCO: {e}", pair=symbol, console=1, log=1, telegram=0)
+            # Place OCO order using BingX connector (ccxt)
+            ocoOrder = self.exchange.create_order(symbol, 'OCO', 'sell', float(filled), float(tpPrice), {'stopPrice': float(slPrice), 'stopLimitPrice': float(slLimit)})
+            tpId = ocoOrder.get('id')
+            slId = ocoOrder.get('params', {}).get('stopOrderId')
         except Exception as e:
             messages(f"Error placing OCO for {symbol}: {e}", console=1, log=1, telegram=1, pair=symbol)
 

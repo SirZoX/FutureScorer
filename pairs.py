@@ -2,6 +2,7 @@ import threading
 import json
 import time
 import ccxt
+from connector import bingxConnector
 import pandas as pd
 
 
@@ -58,7 +59,7 @@ class RateLimiter:
 
 # Initialize managers
 orderManager = orderManager.OrderManager()
-exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'spot'}})
+exchange = bingxConnector()
 rate_limiter = RateLimiter(max_calls=gvars.rateLimiterMaxCalls, period=gvars.rateLimiterPeriodSeconds)
 
 
