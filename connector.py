@@ -19,8 +19,8 @@ def loadConfig():
 def bingxConnector(isSandbox=False):
     """Create and return a BingX Futures connection using ccxt and config data. If isSandbox=True, use BingX sandbox."""
     configData = loadConfig()
-    apiKey = configData.get('apikey')
-    secret = configData.get('apisecret')
+    apiKey = configData.get('apikey') or configData.get('apiKey')
+    secret = configData.get('apisecret') or configData.get('apiSecret')
     #password = configData.get('bingxPassword')
     if not apiKey or not secret:
         raise Exception('API key or secret missing in config.json')
