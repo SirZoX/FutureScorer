@@ -527,17 +527,13 @@ def updatePairs():
         configData = json.load(f)
     topCoinsPctAnalyzed = configData.get('topCoinsPctAnalyzed', 10)
 
-    usdcPairs = [
-        symbol for symbol, info in markets.items()
-        if info.get('spot') and symbol.endswith('/USDC') and info.get('info', {}).get('status') == 'TRADING'
-    ]
-
-    # Excluir pares no deseados
-    filtered = [s for s in usdcPairs if s not in ignorePairs]
+    # Selección de pares de futuros perpetuos USDT
+    futuresPairs = getFuturesPairs()
+    filtered = [s for s in futuresPairs if s not in ignorePairs]
     total = len(filtered)
     numSelect = max(1, int(total * topCoinsPctAnalyzed / 100))
 
-    messages(f"Total USDC spot pairs: {total}. Selecting top {topCoinsPctAnalyzed}% -> {numSelect} pairs", console=1, log=1, telegram=0)
+    messages(f"Total USDT perpetual futures pairs: {total}. Selecting top {topCoinsPctAnalyzed}% -> {numSelect} pairs", console=1, log=1, telegram=0)
 
     # Obtener volúmenes    
     try:
