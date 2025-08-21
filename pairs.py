@@ -162,6 +162,8 @@ def analyzePairs():
     time.sleep(5)
     # 2) Generate opportunities in parallel
     def processPair(pair):
+        import time
+        time.sleep(0.1)  # Espera 0.1s entre llamadas para evitar rate limit
         rate_limiter.acquire()
         try:
             # ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, limit)
