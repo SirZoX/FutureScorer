@@ -286,8 +286,6 @@ if __name__ == "__main__":
 
 
 
-    # Comprobar y recargar BNB para fees al inicio
-    helpers.auto_refill_bnb(orderManager.exchange)
     # timeframeScheduled(timeframe, limit)
     timeframeScheduled(timeframe, requestedCandles)
 
@@ -311,8 +309,6 @@ if __name__ == "__main__":
     setupSchedules(timeframe)
     schedule.every(3).minutes.do(safe_update_positions)
     schedule.every().day.at("00:00").do(orderManager.updateDailyBalance)
-    # Programar recarga de BNB para fees todos los días a las 00:05
-    schedule.every().day.at("00:05").do(lambda: helpers.auto_refill_bnb(orderManager.exchange))
     schedule.every(10).seconds.do(helpers.checkTelegram)
 
     while True:

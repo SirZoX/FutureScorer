@@ -1,28 +1,3 @@
-def auto_refill_bnb(exchange, usdc_symbol="USDC", bnb_symbol="BNB/USDC", min_usdc=1, refill_usdc=10):
-    """
-    Checks BNB balance (converted to USDC). If less than min_usdc, buys refill_usdc in BNB using ccxt.
-    Logs all actions and errors.
-    """
-    try:
-        bal = exchange.fetch_balance()
-        bnb = bal.get('BNB', {})
-        bnb_amt = float(bnb.get('free', 0) or 0)
-        # Get BNB/USDC price
-        ticker = exchange.fetch_ticker(bnb_symbol)
-        price = float(ticker.get('last') or ticker.get('close') or 0)
-        bnb_usdc = bnb_amt * price
-        if bnb_usdc >= min_usdc:
-            messages(f"[BNB REFILL] Suficiente BNB para fees: {bnb_amt:.6f} BNB ({bnb_usdc:.4f} USDC)", console=0, log=1, telegram=0, pair=bnb_symbol)
-            return False
-        # Calcular cantidad de BNB a comprar
-        qty = refill_usdc / price if price else 0
-        # Comprar BNB
-        order = exchange.create_market_buy_order(bnb_symbol, qty)
-        messages(f"[BNB REFILL] Comprados {qty:.6f} BNB (aprox {refill_usdc} USDC) para fees", console=1, log=1, telegram=1, pair=bnb_symbol)
-        return True
-    except Exception as e:
-        messages(f"[BNB REFILL] Error al comprobar o comprar BNB: {e}", console=1, log=1, telegram=1, pair=bnb_symbol)
-        return False
 
 import requests
 import json
