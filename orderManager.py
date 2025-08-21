@@ -26,8 +26,11 @@ class OrderManager:
             messages(f"Error loading config: {e}", console=1, log=1, telegram=0)
             self.config = {}
 
-        # Set base asset for balance checks (default to USDC if not in config)
-        self.baseAsset = self.config.get("baseAsset", "USDC")  # English comment: define the asset used for funding
+        # Set base asset for balance checks (VST en sandbox, USDC en real)
+        if isSandbox:
+            self.baseAsset = "VST"
+        else:
+            self.baseAsset = self.config.get("baseAsset", "USDC")  # English comment: define the asset used for funding
 
         # Initialize CCXT exchange
         try:
