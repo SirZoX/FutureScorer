@@ -163,7 +163,7 @@ def analyzePairs():
     # 2) Generate opportunities in parallel
     def processPair(pair):
         import time
-    time.sleep(0.21)  # Espera 0.21s entre llamadas para evitar rate limit
+        time.sleep(0.21)  # Espera 0.21s entre llamadas para evitar rate limit
         rate_limiter.acquire()
         try:
             # ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, limit)
@@ -573,9 +573,6 @@ def updatePairs():
 
     # ...existing code...
     # Justo antes de iniciar el análisis, imprimir los pares seleccionados ordenados por volumen
-    print("Pares seleccionados para análisis (ordenados por volumen USDT):")
-    for pair in selected:
-        print(f"{pair}: {volumes_usdt[pair]:.2f} USDT")
 
     # Mensaje informativo antes de analizar
     numMonedas = len(selected)
