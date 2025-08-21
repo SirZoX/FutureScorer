@@ -542,6 +542,8 @@ def updatePairs():
     numSelect = max(1, int(total * topCoinsPctAnalyzed / 100))
 
     messages(f"Total USDT perpetual futures pairs: {total}. Selecting top {topCoinsPctAnalyzed}% -> {numSelect} pairs", console=1, log=1, telegram=0)
+    for pair in filtered:
+        print(pair)
     import sys; sys.exit("Interrupción: solo mostrando cantidad de pares, análisis detenido para evitar baneo.")
 
     # Obtener volúmenes    
