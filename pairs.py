@@ -1,4 +1,5 @@
 import threading
+import os
 import json
 import time
 import ccxt
@@ -259,7 +260,11 @@ def analyzePairs():
         )
 
         # csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, limit)
-        csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
+        # Guardar CSV solo si hay datos
+        if ohlcv and len(ohlcv) > 0:
+            csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
+        else:
+            csvPath = None
 
         # calcular MA25prev y bounce bounds
         ma25 = df["close"].rolling(25).mean()
@@ -276,7 +281,7 @@ def analyzePairs():
 
         return {
             "pair":             pair,
-            "csvPath":          csvPath,
+            "csvPath":          csvPath if csvPath else "",
             "slope":            slope,
             "intercept":        intercept,
             "touchesCount":     touchesCount,
@@ -407,15 +412,17 @@ def analyzePairs():
                     "score": opp.get("score")
                 }
                 try:
-                    plotPath = plotting.savePlot(item)
-                    caption = (
-                        f"{record['symbol']}\n"
-                        f"Investment: {configData['usdcInvestment']} USDC ({investmentPct*100:.0f}%)\n"
-                        f"Entry Price: {record['openPrice']}\n"
-                        f"TP: {record['tpPrice']}\n"
-                        f"SL: {record['slPrice']}"
-                    )
-                    messages([plotPath], console=0, log=1, telegram=2, caption=caption)
+                    # Solo generar plot si el CSV tiene datos
+                    if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
+                        plotPath = plotting.savePlot(item)
+                        caption = (
+                            f"{record['symbol']}\n"
+                            f"Investment: {configData['usdcInvestment']} USDC ({investmentPct*100:.0f}%)\n"
+                            f"Entry Price: {record['openPrice']}\n"
+                            f"TP: {record['tpPrice']}\n"
+                            f"SL: {record['slPrice']}"
+                        )
+                        messages([plotPath], console=0, log=1, telegram=2, caption=caption)
                 except Exception as e:
                     messages(f"Error generating plot for {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
             else:
