@@ -548,21 +548,26 @@ def updatePairs():
         tickers = {}
 
 
-    # Calcular volumen en USDT para cada par
+
+    # Leer volumen mínimo de config
+    minVolume = configData.get('last24hrsPairVolume', 0)
+
+    # Calcular volumen en USDT para cada par y filtrar por mínimo
     volumes_usdt = {}
     for s in filtered:
         ticker = tickers.get(s, {})
         baseVol = ticker.get('baseVolume', 0) or 0
         price = ticker.get('last', 0) or 0
         vol_usdt = baseVol * price
-        volumes_usdt[s] = vol_usdt
+        if vol_usdt >= minVolume:
+            volumes_usdt[s] = vol_usdt
 
     # Ordenar por volumen USDT descendente
     sortedPairs = sorted(volumes_usdt, key=lambda x: volumes_usdt[x], reverse=True)
     numSelect = max(1, int(len(sortedPairs) * topCoinsPctAnalyzed / 100))
     selected = sortedPairs[:numSelect]
 
-    messages(f"Total USDT perpetual futures pairs: {total}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
+    messages(f"Total USDT perpetual futures pairs con volumen >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
     for pair in selected:
         print(f"{pair}: {volumes_usdt[pair]:.2f} USDT")
     import sys; sys.exit("Interrupción: mostrando top% por volumen USDT, análisis detenido para evitar baneo.")
