@@ -49,18 +49,16 @@ class RateLimiter:
 
 
 
-# ——— Load configuration ———
-
-
-
-
-
-
 
 # Initialize managers
 orderManager = orderManager.OrderManager()
 exchange = bingxConnector()
 rate_limiter = RateLimiter(max_calls=gvars.rateLimiterMaxCalls, period=gvars.rateLimiterPeriodSeconds)
+
+# Filtrar solo los pares de futuros perpetuos (swap) de BingX
+def getFuturesPairs():
+    markets = exchange.load_markets()
+    return [symbol for symbol, info in markets.items() if info.get('type') == 'swap']
 
 
 
