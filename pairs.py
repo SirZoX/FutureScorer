@@ -57,8 +57,10 @@ rate_limiter = RateLimiter(max_calls=gvars.rateLimiterMaxCalls, period=gvars.rat
 
 # Filtrar solo los pares de futuros perpetuos (swap) de BingX
 def getFuturesPairs():
-    markets = exchange.load_markets()
-    return [symbol for symbol, info in markets.items() if info.get('type') == 'swap' and symbol.endswith('USDT')]
+    # Usar markets.json para filtrar por symbol que termina en USDT:USDT
+    with open(gvars.marketsFile, encoding='utf-8') as f:
+        markets = json.load(f)
+    return [info['symbol'] for info in markets.values() if info.get('symbol', '').endswith('USDT:USDT')]
 
 
 
