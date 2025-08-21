@@ -568,9 +568,13 @@ def updatePairs():
     selected = sortedPairs[:numSelect]
 
     messages(f"Total USDT perpetual futures pairs con volumen >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
+
+    # ...existing code...
+    # Justo antes de iniciar el análisis, imprimir los pares seleccionados ordenados por volumen
+    print("Pares seleccionados para análisis (ordenados por volumen USDT):")
     for pair in selected:
         print(f"{pair}: {volumes_usdt[pair]:.2f} USDT")
-    import sys; sys.exit("Interrupción: mostrando top% por volumen USDT, análisis detenido para evitar baneo.")
+    # ...aquí continúa el análisis...
 
     # Guardar selección
     fileManager.saveJson(selected, gvars.topSelectionFile.split('/')[-1])
