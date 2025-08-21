@@ -28,7 +28,7 @@ rateLimiterMaxCalls = 20                    # max API calls per period
 rateLimiterPeriodSeconds = 1.0              # period length in seconds
 
 # Concurrency
-threadPoolMaxWorkers = 10                   # default max threads for analysis
+threadPoolMaxWorkers = 5                    # default max threads for analysis
 
 
 clientPrefix = "SCBot_"
