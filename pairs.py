@@ -547,16 +547,25 @@ def updatePairs():
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
         tickers = {}
 
-    # Ordenar por volumen descendente
-    volumes = {s: tickers.get(s, {}).get('quoteVolume', 0) for s in filtered}
-    sortedPairs = sorted(volumes, key=lambda x: volumes[x], reverse=True)
+
+    # Calcular volumen en USDT para cada par
+    volumes_usdt = {}
+    for s in filtered:
+        ticker = tickers.get(s, {})
+        baseVol = ticker.get('baseVolume', 0) or 0
+        price = ticker.get('last', 0) or 0
+        vol_usdt = baseVol * price
+        volumes_usdt[s] = vol_usdt
+
+    # Ordenar por volumen USDT descendente
+    sortedPairs = sorted(volumes_usdt, key=lambda x: volumes_usdt[x], reverse=True)
     numSelect = max(1, int(len(sortedPairs) * topCoinsPctAnalyzed / 100))
     selected = sortedPairs[:numSelect]
 
     messages(f"Total USDT perpetual futures pairs: {total}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
     for pair in selected:
-        print(pair)
-    import sys; sys.exit("Interrupción: mostrando top% por volumen, análisis detenido para evitar baneo.")
+        print(f"{pair}: {volumes_usdt[pair]:.2f} USDT")
+    import sys; sys.exit("Interrupción: mostrando top% por volumen USDT, análisis detenido para evitar baneo.")
 
     # Guardar selección
     fileManager.saveJson(selected, gvars.topSelectionFile.split('/')[-1])
