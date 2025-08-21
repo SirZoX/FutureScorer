@@ -576,6 +576,16 @@ def updatePairs():
     print("Pares seleccionados para análisis (ordenados por volumen USDT):")
     for pair in selected:
         print(f"{pair}: {volumes_usdt[pair]:.2f} USDT")
+
+    # Mensaje informativo antes de analizar
+    numMonedas = len(selected)
+    numHilos = gvars.threadPoolMaxWorkers
+    sleepSeg = 0.21
+    # Cálculo aproximado del tiempo esperado
+    tiempoPorMoneda = sleepSeg
+    tiempoTotal = (numMonedas / numHilos) * tiempoPorMoneda
+    print(f"Se van a analizar {numMonedas} monedas, con {numHilos} hilos simultáneos y {sleepSeg}s de sleep entre llamadas.")
+    print(f"Tiempo esperado aproximado: {tiempoTotal:.1f} segundos ({tiempoTotal/60:.1f} minutos)")
     # ...aquí continúa el análisis...
 
     # Guardar selección
