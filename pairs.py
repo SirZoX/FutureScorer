@@ -539,24 +539,24 @@ def updatePairs():
     futuresPairs = getFuturesPairs()
     filtered = [s for s in futuresPairs if s not in ignorePairs]
     total = len(filtered)
-    numSelect = max(1, int(total * topCoinsPctAnalyzed / 100))
 
-    messages(f"Total USDT perpetual futures pairs: {total}. Selecting top {topCoinsPctAnalyzed}% -> {numSelect} pairs", console=1, log=1, telegram=0)
-    for pair in filtered:
-        print(pair)
-    import sys; sys.exit("Interrupción: solo mostrando cantidad de pares, análisis detenido para evitar baneo.")
-
-    # Obtener volúmenes    
+    # Obtener volúmenes de todos los pares filtrados
     try:
         tickers = exchange.fetch_tickers()
     except Exception as e:
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
         tickers = {}
 
+    # Ordenar por volumen descendente
     volumes = {s: tickers.get(s, {}).get('quoteVolume', 0) for s in filtered}
-    selected = sorted(volumes, key=lambda x: volumes[x], reverse=True)[:numSelect]
+    sortedPairs = sorted(volumes, key=lambda x: volumes[x], reverse=True)
+    numSelect = max(1, int(len(sortedPairs) * topCoinsPctAnalyzed / 100))
+    selected = sortedPairs[:numSelect]
 
-    #messages(f"Selected pairs: {selected}", console=0, log=1, telegram=0)
+    messages(f"Total USDT perpetual futures pairs: {total}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
+    for pair in selected:
+        print(pair)
+    import sys; sys.exit("Interrupción: mostrando top% por volumen, análisis detenido para evitar baneo.")
 
     # Guardar selección
     fileManager.saveJson(selected, gvars.topSelectionFile.split('/')[-1])
