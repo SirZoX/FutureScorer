@@ -11,10 +11,10 @@ print ("\n\nLoading modules")
 
 import os
 import sys
-import json
 import threading
 import schedule
 from datetime import datetime
+
 
 
 
@@ -26,6 +26,12 @@ import pairs
 
 from logManager import messages
 from connector import loadConfig
+
+# Argument control for sandbox mode
+isSandbox = False
+if '-test' in sys.argv:
+    isSandbox = True
+    print('Modo SANDBOX activado: se usará BingX sandbox y VST')
 
 
 
@@ -44,7 +50,7 @@ def safe_update_positions():
         orderManager.updatePositions()
 
 
-orderManager = orderManager.OrderManager()
+orderManager = orderManager.OrderManager(isSandbox=isSandbox)
 
 
 

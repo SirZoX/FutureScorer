@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 
 class OrderManager:
-    def __init__(self):
+    def __init__(self, isSandbox=False):
         # Load config and credentials
         try:
             with open(configFile, encoding='utf-8') as f:
@@ -31,7 +31,7 @@ class OrderManager:
 
         # Initialize CCXT exchange
         try:
-            self.exchange = bingxConnector()
+            self.exchange = bingxConnector(isSandbox=isSandbox)
         except Exception as e:
             messages(f"Error initializing BingX connector: {e}", console=1, log=1, telegram=0)
             self.exchange = None
