@@ -108,6 +108,8 @@ def analyzePairs():
     # ——— 0) Limpiar carpeta de plots ———
     fileManager.deleteOldFiles(json=False, csv=True, plots=True)
     from positionMonitor import monitorActive
+    import time
+    startTime = time.time()
     messages("Starting analysis", console=1, log=1, telegram=0)
     monitorActive.clear()  # Pausa el monitor
     dateTag = datetime.utcnow().date().isoformat()
@@ -491,7 +493,9 @@ def analyzePairs():
 
 
     # 8) Finish without deleting plots
-    messages("End processing", console=1, log=1, telegram=0)
+    endTime = time.time()
+    elapsed = endTime - startTime
+    messages(f"End processing. Elapsed: {elapsed:.2f}s", console=1, log=1, telegram=0)
     messages(gvars._line_, console=1, log=1, telegram=0)
     monitorActive.set()  # Reactiva el monitor
 

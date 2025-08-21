@@ -14,7 +14,7 @@ import sys
 import threading
 import schedule
 from datetime import datetime
-
+from rich import print
 
 
 
@@ -31,7 +31,7 @@ from connector import loadConfig
 isSandbox = False
 if '-test' in sys.argv:
     isSandbox = True
-    print('Modo SANDBOX activado: se usará BingX sandbox y VST')
+    print('[bold yellow1]>>> SANDBOX activated: Using VST instead USDT[/bold yellow1]')
 
 
 
