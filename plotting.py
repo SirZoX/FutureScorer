@@ -171,8 +171,10 @@ def savePlot(item):
 
     # Generate filename
     timestampTag = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    safePair     = item['pair'].replace('/', '_')
-    plotPath     = gvars.plotsFolder + f"/{safePair}_{timestampTag}.png"
+    # English comment: Remove everything after the first '/' and any ':' for plot filename
+    basePair = item['pair'].split('/')[0] if '/' in item['pair'] else item['pair']
+    basePair = basePair.replace(':', '')
+    plotPath = gvars.plotsFolder + f"/{basePair}_{timestampTag}.png"
 
     # Save and close
     try:
