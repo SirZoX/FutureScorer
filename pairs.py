@@ -205,7 +205,15 @@ def analyzePairs():
             minTouches=minTouches
         )
         if len(bases) != 2:
-            return {"pair": pair, "reason": "No valid support/resistance line found"}
+            # Guardar CSV si hay datos
+            csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else None
+            return {
+                "pair": pair,
+                "reason": "No valid support/resistance line found",
+                "csvPath": csvPath,
+                "slope": slope,
+                "intercept": intercept
+            }
 
         last, prev = len(df)-1, len(df)-2
         lowLast, expLast     = df["low"].iat[last],   lineExp[last]
