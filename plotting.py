@@ -121,41 +121,47 @@ def savePlot(item):
     supportLine = Line2D([0], [1], color='orange', linewidth=2)
     ma25Line = Line2D([0], [1], color='magenta', linewidth=1)
     ma99Line = Line2D([0], [1], color='blue', linewidth=1)
-    # Compose a single label with colored texts using proxy artists
     handles = [supportLine, ma25Line, ma99Line]
-    labels = [
-        'Support',
-        'MA25',
-        'MA99'
-    ]
+    labels = ['Support', 'MA25', 'MA99']
 
-    # Add scoring details to legend if available
-    scoringKeys = ['momentum', 'distance', 'touches', 'volume', 'score']
-    scoringValues = []
-    for key in scoringKeys:
-        val = item.get(key)
-        if val is not None:
-            scoringValues.append(f"{key.capitalize()}: {val:.3f}")
-    if scoringValues:
+    # Evaluación de criterios
+    def ok(val): return '\u2714 OK'  # ✓
+    def ko(val): return '\u2718 KO'  # ✗
+    # Criterios principales
+    slope = item.get('slope', 0)
+    touchCount = item.get('touchCount', 0)
+    minTouches = 3
+    # Para soporte: slope positivo, para resistencia: negativo
+    isLong = item.get('type', 'long') == 'long'
+    slopeOk = slope > 0 if isLong else slope < 0
+    touchesOk = touchCount >= minTouches
+    # Violaciones y rebote (solo si están en item)
+    violationOk = True if item.get('violationOk', True) else False
+    bounceOk = True if item.get('bounce', True) else False
+
+    # Colores para leyenda
+    def colorText(text, ok):
+        return f"$\\bf{{{text}}}$" if ok else f"$\\bf{{{text}}}$"
+
+    # Leyenda de criterios
+    critLabels = [
+        f"Slope: {slope:.4f} {'✓ OK' if slopeOk else '✗ KO'}",
+        f"Touches: {touchCount} {'✓ OK' if touchesOk else '✗ KO'}",
+        f"Violations: {'✓ OK' if violationOk else '✗ KO'}",
+        f"Bounce: {'✓ OK' if bounceOk else '✗ KO'}"
+    ]
+    for cl in reversed(critLabels):
         proxy = Line2D([0], [0], color='none', marker='', linestyle='')
-        scoringLabel = "Scoring → " + ", ".join(scoringValues)
+        labels.insert(0, cl)
         handles.insert(0, proxy)
-        labels.insert(0, scoringLabel)
 
     # Add last candle open date to legend (Europe/Madrid timezone)
     lastCandleDate = df['timestamp'].iloc[-1]
     lastCandleDateStr = lastCandleDate.strftime('%Y-%m-%d %H:%M') if hasattr(lastCandleDate, 'strftime') else str(lastCandleDate)
     proxyDate = Line2D([0], [0], color='none', marker='', linestyle='')
     dateLabel = f"Última vela abierta (Madrid): {lastCandleDateStr}"
-    handles.insert(0, proxyDate)
     labels.insert(0, dateLabel)
-
-    # Add bounce value and candle offset to legend
-    if bl is not None and bounceIdx is not None:
-        relPos      = bounceIdx - n  # negative index
-        bounceLabel = f"BounceLow {bl:.6f} (candle {relPos})"
-        handles.insert(0, handles.pop())  # move 'Bounce Ref Point' handle to front
-        labels.insert(0, bounceLabel)
+    handles.insert(0, proxyDate)
 
     # Draw legend
     ax.legend(handles, labels, loc=legendLoc, fontsize='small', borderaxespad=0.5)
