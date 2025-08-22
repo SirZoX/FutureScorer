@@ -170,24 +170,18 @@ def analyzePairs():
         time.sleep(0.21)  # Espera 0.21s entre llamadas para evitar rate limit
         rate_limiter.acquire()
         try:
-            # ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, limit)
             ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, requestedCandles)
         except Exception as e:
-            messages(f"OHLCV error {pair}: {e}", console=1, log=1, telegram=0, pair=pair)
-            return None
+            return {"pair": pair, "reason": f"OHLCV error: {e}"}
 
         df = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-
         # Discard the most recent candle if it's too close to now
         if len(df) > 0:
-            # English comment: use timezone-aware UTC datetime to avoid deprecation warning
             now = datetime.now(UTC)
             lastCandleTime = df["timestamp"].iloc[-1]
-            # English comment: ensure lastCandleTime is tz-aware in UTC for subtraction
             if lastCandleTime.tzinfo is None:
                 lastCandleTime = lastCandleTime.replace(tzinfo=UTC)
-            # Convert timeframe to seconds
             tfStr = str(timeframe)
             if tfStr.endswith('m'):
                 tfSeconds = int(tfStr[:-1]) * 60
@@ -199,19 +193,9 @@ def analyzePairs():
                 tfSeconds = 0
             diffSeconds = (now - lastCandleTime).total_seconds()
             if diffSeconds < tfSeconds:
-                # Remove the last candle
                 df = df.iloc[:-1]
 
         df = filter_signals(df)
-
-        # slope, intercept, touchesCount, lineExp, bases = findSupportLine(
-        #     df["low"].values,
-        #     df["close"].values,
-        #     df["open"].values,
-        #     tolerancePct=tolerancePct,
-        #     minSeparation=minSeparation,
-        #     minTouches=minTouches
-        # )
         slope, intercept, touchesCount, lineExp, bases = findSupportLine(
             df["low"].values,
             df["close"].values,
@@ -221,7 +205,7 @@ def analyzePairs():
             minTouches=minTouches
         )
         if len(bases) != 2:
-            return None
+            return {"pair": pair, "reason": "No valid support/resistance line found"}
 
         last, prev = len(df)-1, len(df)-2
         lowLast, expLast     = df["low"].iat[last],   lineExp[last]
@@ -233,7 +217,7 @@ def analyzePairs():
         touchesSupport = abs(lowPrev - expPrev) <= abs(expPrev) * tolerance
         isGreen = closeLast > openLast
         if not (touchesSupport and isGreen):
-            return None
+            return {"pair": pair, "reason": "No opportunity: last candle not green or not touching support"}
         avgVol   = df["volume"].mean() or 1
         volTouch = df["volume"].iat[last]
         closeLast = df["close"].iat[last]
@@ -243,8 +227,7 @@ def analyzePairs():
         #     messages(f"  ⚠️  {pair} ignorado por volumen USDC bajo: {volUsdc:.2f} < minVolume {minVolume}", console=1, log=1, telegram=0, pair=pair)
         #     return None
         if volUsdc < lastCandleMinUSDVolume:
-            messages(f"  ⚠️  {pair} ignorado por volumen USDC bajo: {volUsdc:.2f} < lastCandleMinUSDVolume {lastCandleMinUSDVolume}", console=1, log=1, telegram=0, pair=pair)
-            return None
+            return {"pair": pair, "reason": f"Low volume: {volUsdc:.2f} < lastCandleMinUSDVolume {lastCandleMinUSDVolume}"}
         distance = abs(lowLast - expLast)
         distancePct = distance / expLast if expLast else 0
         volumeRatio = volTouch / avgVol
@@ -307,7 +290,12 @@ def analyzePairs():
         for fut in as_completed(futures):
             res = fut.result()
             if res:
-                opportunities.append(res)
+                # Si es oportunidad válida, añadir a opportunities
+                if 'score' in res:
+                    opportunities.append(res)
+                # Si es descarte, loguear la razón
+                elif 'reason' in res:
+                    messages(f"{res['pair']} descartada: {res['reason']}", console=1, log=1, telegram=0, pair=res['pair'])
 
     # 3) Sort by score descending
     ordered = sorted(opportunities, key=lambda o: o["score"], reverse=True)
