@@ -2,7 +2,7 @@
 """
 Global static variables for scoringbot.
 """
-version = "0.4.0"  # Bot version
+version = "0.0.1"  # Bot version
 
 # Base folders
 baseFolder = "_files"                       # main storage folder

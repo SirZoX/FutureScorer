@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 import gvars
 import plotting
 import orderManager
+import args
 import fileManager
 import helpers
 
@@ -52,7 +53,7 @@ class RateLimiter:
 
 
 # Initialize managers
-orderManager = orderManager.OrderManager()
+orderManager = orderManager.OrderManager(isSandbox=args.isSandbox)
 exchange = bingxConnector()
 rate_limiter = RateLimiter(max_calls=gvars.rateLimiterMaxCalls, period=gvars.rateLimiterPeriodSeconds)
 
