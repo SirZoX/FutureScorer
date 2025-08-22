@@ -205,8 +205,10 @@ def analyzePairs():
             minTouches=minTouches
         )
         if len(bases) != 2:
-            # Guardar CSV si hay datos
-            csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else None
+            # Guardar CSV siempre que haya datos OHLCV
+            csvPath = None
+            if ohlcv and len(ohlcv) > 0:
+                csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
             return {
                 "pair": pair,
                 "reason": "No valid support/resistance line found",
