@@ -256,11 +256,15 @@ def analyzePairs():
             scoringWeights["touches"]  * min(touchesCount / minTouches, 1)
         )
 
-        # csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, limit)
         # Guardar CSV solo si hay datos
         if ohlcv and len(ohlcv) > 0:
+            print(f"[DEBUG] Guardando CSV para {pair} - ohlcv len: {len(ohlcv)}")
+            print(f"[DEBUG] Primer elemento ohlcv: {ohlcv[0] if len(ohlcv)>0 else 'VACIO'}")
+            dfDebug = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
+            print(f"[DEBUG] DataFrame antes de guardar CSV: {dfDebug.head()} (shape: {dfDebug.shape})")
             csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
         else:
+            print(f"[DEBUG] ohlcv vacío para {pair}, no se guarda CSV")
             csvPath = None
 
         # calcular MA25prev y bounce bounds
