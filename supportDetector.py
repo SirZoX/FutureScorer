@@ -1,3 +1,70 @@
+def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSeparation, minTouches, closeViolationPct=0.02):
+    """
+    Detects possible support (long) and resistance (short) lines in a single pass.
+    Returns a list of opportunities, each with type ('long' or 'short'), slope, intercept, touchCount, lineExp, bases, and validation flags.
+    """
+    n = len(lows)
+    if n < minSeparation + 2:
+        return []
+    xIdx = np.arange(n)
+    opportunities = []
+    for i in range(n - minSeparation):
+        for j in range(i + minSeparation, n):
+            y1, y2 = lows[i], lows[j]
+            x1, x2 = i, j
+            slope = (y2 - y1) / (x2 - x1)
+            intercept = y1 - slope * x1
+            lineExp = slope * xIdx + intercept
+            # Touches within tolerance
+            touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
+            touchCount = int(touchMask.sum())
+            if touchCount < minTouches:
+                continue
+            # Percentage of candles with close above/below the line
+            closesAbove = closes > lineExp
+            closesBelow = closes < lineExp
+            ratioAbove = closesAbove.sum() / n
+            ratioBelow = closesBelow.sum() / n
+            violationRatio = min(ratioBelow, ratioAbove)
+            # Soporte (long): slope positivo y % de velas por encima suficiente
+            if slope > 0:
+                # Últimas dos velas deben estar por encima de la línea
+                if lows[-1] < lineExp[-1] or lows[-2] < lineExp[-2]:
+                    continue
+                # Rebote: dos velas verdes y cierre > línea * (1 + bouncePct)
+                bounce = closes[-1] > opens[-1] and closes[-2] > opens[-2] and closes[-1] > closes[-2] and (closes[-1] - lineExp[-1]) / lineExp[-1] >= bouncePct
+                if ratioAbove > 1 - closeViolationPct and bounce:
+                    opportunities.append({
+                        'type': 'long',
+                        'slope': slope,
+                        'intercept': intercept,
+                        'touchCount': touchCount,
+                        'lineExp': lineExp,
+                        'bases': [i, j],
+                        'ratioAbove': ratioAbove,
+                        'ratioBelow': ratioBelow,
+                        'bounce': bounce
+                    })
+            # Resistencia (short): slope negativo y % de velas por debajo suficiente
+            elif slope < 0:
+                # Últimas dos velas deben estar por debajo de la línea
+                if lows[-1] > lineExp[-1] or lows[-2] > lineExp[-2]:
+                    continue
+                # Rebote: dos velas rojas y cierre < línea * (1 - bouncePct)
+                bounce = closes[-1] < opens[-1] and closes[-2] < opens[-2] and closes[-1] < closes[-2] and (lineExp[-1] - closes[-1]) / lineExp[-1] >= bouncePct
+                if ratioBelow > 1 - closeViolationPct and bounce:
+                    opportunities.append({
+                        'type': 'short',
+                        'slope': slope,
+                        'intercept': intercept,
+                        'touchCount': touchCount,
+                        'lineExp': lineExp,
+                        'bases': [i, j],
+                        'ratioAbove': ratioAbove,
+                        'ratioBelow': ratioBelow,
+                        'bounce': bounce
+                    })
+    return opportunities
 
 # supportDetector.py
 import json
