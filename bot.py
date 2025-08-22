@@ -5,6 +5,7 @@ import os
 import sys
 import schedule
 from datetime import datetime
+from rich import print
 def startPositionMonitor():
     t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
     t.start()

@@ -102,10 +102,11 @@ def savePlot(item):
         lowPrev = df['low'].iat[n-2]
         expPrev = supportLine[n-2]
         closeLast = df['close'].iat[n-1]
-        openLast = df['open'].iat[n-1]
-        if abs(lowPrev - expPrev) <= abs(expPrev) * tolerancePct and closeLast > openLast:
-            bounceIdx = n-2
-
+        # Generate filename with LONG_ or SHORT_ prefix and no date/time tag
+        basePair = item['pair'].split('/')[0] if '/' in item['pair'] else item['pair']
+        basePair = basePair.replace(':', '')
+        prefix = 'LONG_' if item.get('type', 'long') == 'long' else 'SHORT_'
+        plotPath = gvars.plotsFolder + f"/{prefix}{basePair}.png"
     # Mark bounce point with red 'X'
     if bounceIdx is not None:
         xPoint = df['timestampNum'].iat[bounceIdx]
