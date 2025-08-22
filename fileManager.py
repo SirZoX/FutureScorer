@@ -70,10 +70,12 @@ def saveJson(data, filename):
 
 
 def saveCsv(data, pair, tf, lim):
-    safePair = pair.replace('/', '_')
+    # English comment: Remove everything after the first '/' and any ':', keep only the base symbol
+    basePair = pair.split('/')[0] if '/' in pair else pair
+    basePair = basePair.replace(':', '')
     now = datetime.now(ZoneInfo("Europe/Madrid"))
     nowTag = now.strftime("%Y-%m-%d %H-%M-%S")
-    filename = gvars.csvFolder + f"/{safePair}_{tf}_{lim}_{nowTag}.csv"
+    filename = gvars.csvFolder + f"/{basePair}_{tf}_{lim}_{nowTag}.csv"
     df = pd.DataFrame(data, columns=['timestamp','open','high','low','close','volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.to_csv(filename, index=False)
