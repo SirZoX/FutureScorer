@@ -102,11 +102,14 @@ def savePlot(item):
         lowPrev = df['low'].iat[n-2]
         expPrev = supportLine[n-2]
         closeLast = df['close'].iat[n-1]
-        # Generate filename with LONG_ or SHORT_ prefix and no date/time tag
+        # Generate filename for plot
         basePair = item['pair'].split('/')[0] if '/' in item['pair'] else item['pair']
         basePair = basePair.replace(':', '')
-        prefix = 'LONG_' if item.get('type', 'long') == 'long' else 'SHORT_'
-        plotPath = gvars.plotsFolder + f"/{prefix}{basePair}.png"
+        if item.get('type', '') == 'discard' or basePair.startswith('DISCARD_'):
+            plotPath = gvars.plotsFolder + f"/DISCARD_{basePair}.png"
+        else:
+            prefix = 'LONG_' if item.get('type', 'long') == 'long' else 'SHORT_'
+            plotPath = gvars.plotsFolder + f"/{prefix}{basePair}.png"
     # Mark bounce point with red 'X'
     if bounceIdx is not None:
         xPoint = df['timestampNum'].iat[bounceIdx]
@@ -176,12 +179,7 @@ def savePlot(item):
     ax.grid(True)
     fig.tight_layout()
 
-    # Generate filename
-    timestampTag = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    # English comment: Remove everything after the first '/' and any ':' for plot filename
-    basePair = item['pair'].split('/')[0] if '/' in item['pair'] else item['pair']
-    basePair = basePair.replace(':', '')
-    plotPath = gvars.plotsFolder + f"/{basePair}_{timestampTag}.png"
+    # El plotPath ya se ha generado correctamente arriba según el tipo
 
     # Save and close
     try:
