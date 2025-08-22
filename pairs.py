@@ -169,11 +169,8 @@ def analyzePairs():
         time.sleep(0.21)  # Espera 0.21s entre llamadas para evitar rate limit
         rate_limiter.acquire()
         try:
-            # Limitar a una sola llamada
-            print(f"Llamando a ohlcv para {pair}")
+            # ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, limit)
             ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, requestedCandles)
-            print(f"Resultado ohlcv para {pair}:")
-            print(ohlcv)
         except Exception as e:
             messages(f"OHLCV error {pair}: {e}", console=1, log=1, telegram=0, pair=pair)
             return None
