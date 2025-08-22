@@ -306,7 +306,6 @@ def analyzePairs():
                     messages(f"{res['pair']} descartada: {res['reason']}", console=0, log=1, telegram=0, pair=res['pair'])
                     # Guardar plot de descarte si hay datos
                     if 'csvPath' in res and res['csvPath']:
-                        import plotting
                         item = {
                             'pair': f"DISCARD_{res['pair']}",
                             'csvPath': res['csvPath'],
@@ -317,7 +316,7 @@ def analyzePairs():
                         try:
                             plotting.savePlot(item)
                         except Exception as e:
-                            messages(f"Error guardando plot descartado para {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
+                            messages(f"Error saving plot for {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
 
     # 3) Sort by score descending
     ordered = sorted(opportunities, key=lambda o: o["score"], reverse=True)
