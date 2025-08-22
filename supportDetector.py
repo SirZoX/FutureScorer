@@ -153,7 +153,38 @@ def findSupportLine(
                 }
 
     if not bestLine:
-        return 0.0, 0.0, 0, np.zeros(n), []
+        # Buscar la mejor línea candidata aunque no cumpla todos los criterios
+        # Recorrer de nuevo y guardar la de mayor touchCount
+        maxTouches = 0
+        candidate = None
+        for i in range(n - minSeparation):
+            for j in range(i + minSeparation, n):
+                y1, y2 = lows[i], lows[j]
+                x1, x2 = i, j
+                slope = (y2 - y1) / (x2 - x1)
+                intercept = y1 - slope * x1
+                lineExp = slope * xIdx + intercept
+                touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
+                touchCount = int(touchMask.sum())
+                if touchCount > maxTouches:
+                    maxTouches = touchCount
+                    candidate = {
+                        'slope': slope,
+                        'intercept': intercept,
+                        'touchCount': touchCount,
+                        'lineExp': lineExp,
+                        'bases': [i, j]
+                    }
+        if candidate:
+            return (
+                candidate['slope'],
+                candidate['intercept'],
+                candidate['touchCount'],
+                candidate['lineExp'],
+                candidate['bases']
+            )
+        else:
+            return 0.0, 0.0, 0, np.zeros(n), []
 
     return (
         bestLine['slope'],
