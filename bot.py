@@ -1,6 +1,10 @@
 import threading
 import positionMonitor
 from positionMonitor import monitorActive
+import os
+import sys
+import schedule
+from datetime import datetime
 def startPositionMonitor():
     t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
     t.start()
@@ -9,12 +13,13 @@ import time
 start = time.time()
 print ("\n\nLoading modules")
 
-import os
-import sys
-import threading
-import schedule
-from datetime import datetime
-from rich import print
+
+# Argument control via args.py
+import args
+isSandbox = args.isSandbox
+isForce = args.isForce
+if isSandbox:
+    print('[bold yellow1]>>> SANDBOX activated: Using VST instead USDT[/bold yellow1]')
 
 
 
