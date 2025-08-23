@@ -324,21 +324,41 @@ def analyzePairs():
 
     # 5) Open positions AND generar plot para todas
     nuevasAbiertas = 0
-    # ...existing code...
+    # Exclusión para evitar procesamiento duplicado de símbolos
+    import threading
+    if not hasattr(analyzePairs, "processingSymbols"):
+        analyzePairs.processingSymbols = set()
+        analyzePairs.processingLock = threading.Lock()
+    processingSymbols = analyzePairs.processingSymbols
+    processingLock = analyzePairs.processingLock
+
     for opp in ordered:
         record = None
         accepted = 0
 
-        # Normalizar el símbolo para plots y Telegram
         symbolNorm = opp["pair"].replace(":USDT", "")
-        # Determinar tipo de operación para el nombre del plot
         plotType = opp.get("type", "LONG").upper()
         plotFileName = f"{plotType}_{symbolNorm}.png"
 
-        # Evitar duplicados: no abrir posición si ya está abierta
-        if opp["pair"] in orderManager.positions:
-            messages(f"Skipping openPosition for {opp['pair']}: position already open", console=1, log=1, telegram=0, pair=opp['pair'])
-            continue
+        # Exclusión rápida: si el símbolo está siendo procesado por otro hilo, saltar
+        with processingLock:
+            if opp["pair"] in processingSymbols:
+                messages(f"Skipping openPosition for {opp['pair']}: already being processed by another thread", console=1, log=1, telegram=0, pair=opp['pair'])
+                continue
+            processingSymbols.add(opp["pair"])
+
+        try:
+            # Evitar duplicados: no abrir posición si ya está abierta
+            if opp["pair"] in orderManager.positions:
+                messages(f"Skipping openPosition for {opp['pair']}: position already open", console=1, log=1, telegram=0, pair=opp['pair'])
+                continue
+            # ...existing code...
+            # Aquí va toda la lógica de apertura y plot
+            # ...existing code...
+        finally:
+            # Al terminar, eliminar el símbolo del set de procesamiento
+            with processingLock:
+                processingSymbols.discard(opp["pair"])
 
         # Investment percentage logic based on score
         score = opp["score"]
