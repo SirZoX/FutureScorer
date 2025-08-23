@@ -480,19 +480,22 @@ class OrderManager:
             import glob
             import os
             csv_path = None
-            safe_pair = symbol.replace('/', '_')
-            pattern = os.path.join(csvFolder, f"{safe_pair}_*.csv")
-            csv_files = glob.glob(pattern)
-            if csv_files:
-                csv_path = max(csv_files, key=os.path.getmtime)
-            if not csv_path:
-                raise Exception(f"No CSV found for {symbol} in {csvFolder}")
+            # Extraer ticker base
+            base_ticker = symbol.split('/')[0] if '/' in symbol else symbol.split('_')[0]
+            # Obtener timeframe y número de velas desde config
+            timeframe = str(self.config.get('timeframe', '15m'))
+            requested_candles = str(self.config.get('requestedCandles', 180))
+            # Construir nombre de archivo CSV
+            csv_filename = f"{base_ticker}_{timeframe}_{requested_candles}.csv"
+            csv_path = os.path.join(csvFolder, csv_filename)
+            if not os.path.isfile(csv_path):
+                raise Exception(f"No CSV found for {symbol} as {csv_filename} in {csvFolder}")
             slope = record.get('slope', 0)
             intercept = record.get('intercept', 0)
             oppData = record.get('opp', {}) if 'opp' in record else {}
             item = {
                 'csvPath': csv_path,
-                'pair': safe_pair,
+                'pair': base_ticker,
                 'slope': slope,
                 'intercept': intercept,
                 'minPctBounceAllowed': float(self.config.get('minPctBounceAllowed', 0.003)),
