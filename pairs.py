@@ -332,13 +332,21 @@ def analyzePairs():
     processingSymbols = analyzePairs.processingSymbols
     processingLock = analyzePairs.processingLock
 
+    # Filtrar oportunidades para que cada símbolo solo se procese una vez
+    seenSymbols = set()
     for opp in ordered:
+        if opp["pair"] in seenSymbols:
+            continue
+        seenSymbols.add(opp["pair"])
         record = None
         accepted = 0
 
-        symbolNorm = opp["pair"].replace(":USDT", "")
+        # Normalizar el símbolo para plots y Telegram
+        symbolNorm = opp["pair"].replace(":USDT", "").replace("/", "_")
         plotType = opp.get("type", "LONG").upper()
+        import os
         plotFileName = f"{plotType}_{symbolNorm}.png"
+        plotPath = os.path.join(gvars.plotsFolder, plotFileName)
 
         # Exclusión rápida: si el símbolo está siendo procesado por otro hilo, saltar
         with processingLock:
@@ -353,7 +361,7 @@ def analyzePairs():
                 messages(f"Skipping openPosition for {opp['pair']}: position already open", console=1, log=1, telegram=0, pair=opp['pair'])
                 continue
             # ...existing code...
-            # Aquí va toda la lógica de apertura y plot
+            # Cuando se genere el plot, usar plotPath para la ruta
             # ...existing code...
         finally:
             # Al terminar, eliminar el símbolo del set de procesamiento
