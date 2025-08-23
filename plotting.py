@@ -105,14 +105,15 @@ def savePlot(item):
         closeLast = df['close'].iat[n-1]
         # Normalizar nombre del par eliminando sufijos y barras
         basePair = item['pair']
-        # Eliminar sufijos como :USDT, _USDT y cualquier barra
+        # Eliminar sufijos como :USDT, _USDT, _USDC, _BUSD, _USDT:USDT y cualquier barra
         basePair = basePair.split('/')[0].split(':')[0].replace('-', '_').replace(' ', '_')
-        if basePair.endswith('_USDT'):
-            basePair = basePair[:-5]
+        for suffix in ['_USDT', '_USDC', '_BUSD']:
+            if basePair.endswith(suffix):
+                basePair = basePair[:-len(suffix)]
         if item.get('type', '') == 'discard' or basePair.startswith('DISCARD_'):
             plotFile = f"DISCARD_{basePair}.png"
         else:
-            prefix = 'LONG_' if item.get('type', 'long') == 'long' else 'SHORT_'
+            prefix = 'LONG_' if item.get('type') == 'long' else 'SHORT_'
             plotFile = f"{prefix}{basePair}.png"
         plotPath = os.path.join(gvars.plotsFolder, plotFile)
     # Mark bounce point with red 'X'
