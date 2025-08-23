@@ -82,7 +82,7 @@ def manageDynamicTpSl():
 def syncOpenedPositions():
     """
     Syncs openedPositions.json with actual open positions in BingX.
-    Removes from the file any position that is not open in the exchange.
+    Removes from the file any position that is not open in the exchange (ni órdenes ni posición activa).
     """
     from connector import bingxConnector
     from gvars import positionsFile
@@ -97,15 +97,17 @@ def syncOpenedPositions():
     exchange = bingxConnector()
     toRemove = []
     for symbol in list(positions.keys()):
-        # Normaliza ambos formatos para comparar
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
         altSymbol = normSymbol + ':USDT' if not symbol.endswith(':USDT') else normSymbol
         try:
-            # Llama a fetch_open_orders para ambos formatos
+            # Verifica órdenes abiertas
             orders_norm = exchange.fetch_open_orders(normSymbol)
             orders_alt = exchange.fetch_open_orders(altSymbol)
-            # Si no hay órdenes abiertas en ninguno, elimina del fichero
-            if not orders_norm and not orders_alt:
+            # Verifica posición activa
+            posList = exchange.fetch_positions([normSymbol])
+            contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
+            # Si no hay órdenes abiertas y tampoco posición activa, elimina del fichero
+            if not orders_norm and not orders_alt and not contractsOpen:
                 messages(f"[SYNC] Eliminando posición cerrada: {symbol}", console=1, log=1, telegram=0)
                 toRemove.append(symbol)
             time.sleep(0.5)
