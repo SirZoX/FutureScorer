@@ -409,11 +409,14 @@ class OrderManager:
             messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
             return None
 
-        # 6) Calculate TP/SL
+        # 6) Calculate TP/SL teniendo en cuenta el leverage
         tpPct = Decimal(str(self.config.get('tp1', 0.02)))
         slPct = Decimal(str(self.config.get('sl1', 0.01)))
-        rawTp = openPrice * (Decimal('1') + tpPct)
-        rawSp = openPrice * (Decimal('1') - slPct)
+        leverage = int(self.config.get('leverage', 10))
+        tpPctPrice = tpPct / Decimal(leverage)
+        slPctPrice = slPct / Decimal(leverage)
+        rawTp = openPrice * (Decimal('1') + tpPctPrice)
+        rawSp = openPrice * (Decimal('1') - slPctPrice)
         tpPrice = (rawTp // tickSize) * tickSize if tickSize else rawTp
         slPrice = (rawSp // tickSize) * tickSize if tickSize else rawSp
         minPrice = Decimal(pf.get('minPrice','0'))
