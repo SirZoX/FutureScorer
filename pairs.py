@@ -162,6 +162,9 @@ def analyzePairs():
     posicionesYaAbiertas = len(orderManager.positions)
     opportunities = []
 
+    # Filtrar pares que ya tienen posición abierta antes de lanzar los hilos
+    pairsToAnalyze = [p for p in pairs if p not in orderManager.positions]
+
     # 2) Esperar 5 segundos antes de lanzar los hilos para obtener las velas
     time.sleep(5)
     # 2) Generate opportunities in parallel
@@ -269,7 +272,7 @@ def analyzePairs():
         return results
 
     with ThreadPoolExecutor(max_workers=gvars.threadPoolMaxWorkers) as executor:
-        futures = {executor.submit(processPair, p): p for p in pairs}
+        futures = {executor.submit(processPair, p): p for p in pairsToAnalyze}
         for fut in as_completed(futures):
             res = fut.result()
             if res:
