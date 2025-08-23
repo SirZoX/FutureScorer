@@ -6,9 +6,11 @@ import sys
 import schedule
 from datetime import datetime
 from rich import print
+
 def startPositionMonitor():
     t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
     t.start()
+
 # bot.py
 import time
 start = time.time()
@@ -17,7 +19,7 @@ print ("\n\nLoading modules")
 
 # Argument control via args.py
 import args
-isSandbox = args.isSandbox
+isSandbox = args.isSandbox or ('-test' in sys.argv)
 isForce = args.isForce
 if isSandbox:
     print('[bold yellow1]>>> SANDBOX activated: Using VST instead USDT[/bold yellow1]')
@@ -32,14 +34,6 @@ import pairs
 
 from logManager import messages
 from connector import loadConfig
-
-# Argument control for sandbox mode
-isSandbox = False
-if '-test' in sys.argv:
-    isSandbox = True
-    print('[bold yellow1]>>> SANDBOX activated: Using VST instead USDT[/bold yellow1]')
-
-
 
 end = time.time()
 print(f"Loading modules time: {(end - start):.2f}s")
