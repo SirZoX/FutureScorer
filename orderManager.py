@@ -390,13 +390,8 @@ class OrderManager:
         orderSide = 'buy' if side == 'long' else 'sell'
         positionSide = 'LONG' if side == 'long' else 'SHORT'
         try:
-            # Set leverage for symbol (BingX requiere side en params)
-            # Si el modo es Hedge, el campo 'side' debe ser LONG o SHORT
             hedgeSide = positionSide if positionSide in ['LONG', 'SHORT'] else 'BOTH'
             self.exchange.set_leverage(leverage, symbol, params={'side': hedgeSide})
-            # Operativa spot (comentada)
-            # buyResp = self.exchange.create_market_buy_order(symbol, amount, params={'newClientOrderId': clientId})
-            # Operativa futuros
             orderResp = self.exchange.create_order(
                 symbol=symbol,
                 type='market',
@@ -421,50 +416,47 @@ class OrderManager:
         rawSp = openPrice * (Decimal('1') - slPct)
         tpPrice = (rawTp // tickSize) * tickSize if tickSize else rawTp
         slPrice = (rawSp // tickSize) * tickSize if tickSize else rawSp
-        slLimit = ((slPrice * Decimal('0.995')) // tickSize) * tickSize if tickSize else rawSp
         minPrice = Decimal(pf.get('minPrice','0'))
         if tickSize:
             tpPrice = max(tpPrice, minPrice)
             slPrice = max(slPrice, minPrice)
-            slLimit = max(slLimit, minPrice)
 
-
-        # Get current price for aboveType logic
-        ticker = self.exchange.fetch_ticker(symbol)
-        currentPrice = float(ticker.get('last') or ticker.get('close') or 0)
-        # Decide aboveType for OCO order
-        # if tpPrice > currentPrice:
-        #     aboveType = 'LIMIT'
-        # elif slPrice > currentPrice:
-        #     aboveType = 'STOP'
-        # else:
-        #     aboveType = 'LIMIT'  # Default fallback
-        # Decide belowType for OCO order
-        # if tpPrice < currentPrice:
-        #     belowType = 'LIMIT'
-        # elif slPrice < currentPrice:
-        #     belowType = 'STOP'
-        # else:
-        #     belowType = 'LIMIT'  # Default fallback
-        # 7) Place OCO sell
+        # 7) Place TP and SL orders (no OCO)
         tpId, slId = None, None
-        # Log all OCO parameters before placing the order
-        messages(
-            f"[DEBUG] OCO params for {symbol}: quantity={float(filled)}, price={tpPrice}, stopPrice={slPrice}, stopLimitPrice={slLimit}",
-            pair=symbol, console=0, log=1, telegram=0
-        )
         try:
-            # Place OCO order using BingX connector (ccxt)
-            ocoOrder = self.exchange.create_order(symbol, 'OCO', 'sell', float(filled), float(tpPrice), {'stopPrice': float(slPrice), 'stopLimitPrice': float(slLimit)})
-            tpId = ocoOrder.get('id')
-            slId = ocoOrder.get('params', {}).get('stopOrderId')
+            tpOrder = self.exchange.create_order(
+                symbol=symbol,
+                type='TAKE_PROFIT_MARKET',
+                side='sell' if side == 'long' else 'buy',
+                amount=float(filled),
+                params={
+                    'stopPrice': float(tpPrice),
+                    'positionSide': positionSide,
+                    'reduceOnly': True
+                }
+            )
+            tpId = tpOrder.get('id')
+            messages(f"[INFO] TP order creada: {tpOrder}", log=1)
         except Exception as e:
-            messages(f"Error placing OCO for {symbol}: {e}", console=1, log=1, telegram=1, pair=symbol)
+            messages(f"[ERROR] Error creando TP: {e}", log=1)
+        try:
+            slOrder = self.exchange.create_order(
+                symbol=symbol,
+                type='STOP_MARKET',
+                side='sell' if side == 'long' else 'buy',
+                amount=float(filled),
+                params={
+                    'stopPrice': float(slPrice),
+                    'positionSide': positionSide,
+                    'reduceOnly': True
+                }
+            )
+            slId = slOrder.get('id')
+            messages(f"[INFO] SL order creada: {slOrder}", log=1)
+        except Exception as e:
+            messages(f"[ERROR] Error creando SL: {e}", log=1)
 
         # 8) Persist and return
-        # Comentar el uso antiguo y dejar nota
-        # 'tpOrderId': tpId,
-        # 'slOrderId': slId,
         record = {
             'symbol':    symbol,
             'openPrice': float(openPrice),
