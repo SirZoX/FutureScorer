@@ -364,25 +364,25 @@ class OrderManager:
         quoteQty = Decimal(str(investUSDC))
         rawAmt = quoteQty / price
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
-        messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=0, log=1, telegram=0)
         info = self.markets.get(normSymbol, {}).get('info', {})
-        messages(f"[DEBUG] info markets: {json.dumps(info, indent=2)}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] info markets: {json.dumps(info, indent=2)}", console=0, log=1, telegram=0)
         pf = next((f for f in info.get('filters', []) if f.get('filterType') == 'PRICE_FILTER'), {})
         ls = next((f for f in info.get('filters', []) if f.get('filterType') == 'LOT_SIZE'), {})
         tickSize = Decimal(pf.get('tickSize', info.get('tickSize', '0'))) or None
         stepSize = Decimal(ls.get('stepSize', info.get('stepSize', '0'))) or None
         minQty   = Decimal(ls.get('minQty', info.get('minQty', '0'))) or None
-        messages(f"[DEBUG] minQty: {minQty}, stepSize: {stepSize}, tickSize: {tickSize}", console=1, log=1, telegram=0)
-        messages(f"[DEBUG] rawAmt calculado: {rawAmt}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] minQty: {minQty}, stepSize: {stepSize}, tickSize: {tickSize}", console=0, log=1, telegram=0)
+        messages(f"[DEBUG] rawAmt calculado: {rawAmt}", console=0, log=1, telegram=0)
         amtDec = rawAmt.quantize(stepSize, rounding=ROUND_DOWN) if stepSize else rawAmt
-        messages(f"[DEBUG] amtDec tras quantize: {amtDec}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] amtDec tras quantize: {amtDec}", console=0, log=1, telegram=0)
         # Si la cantidad calculada es menor que el mínimo, usar el mínimo permitido y recalcular inversión
         if minQty and amtDec < minQty:
-            messages(f"[DEBUG] Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=1, log=1, telegram=0, pair=symbol)
+            messages(f"[DEBUG] Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=0, log=1, telegram=0, pair=symbol)
             amtDec = minQty
             investUSDC = float(minQty) * float(price)
         amount = float(amtDec)
-        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, usdc={investUSDC}", pair=symbol, console=1, log=1, telegram=0)
+        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, usdc={investUSDC}", pair=symbol, console=0, log=1, telegram=0)
 
         # 5) Place futures order (long/short)
         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
