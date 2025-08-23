@@ -252,7 +252,9 @@ def analyzePairs():
                 "bases": opp['bases'],
                 "csvPath": fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else "",
                 "minPctBounceAllowed": minPctBounceAllowed,
-                "maxPctBounceAllowed": maxPctBounceAllowed
+                "maxPctBounceAllowed": maxPctBounceAllowed,
+                "bounceLow": lineExp[last] * (1 + minPctBounceAllowed),
+                "bounceHigh": lineExp[last] * (1 + maxPctBounceAllowed)
             })
         return results
 
