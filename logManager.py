@@ -60,8 +60,10 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
     if plotPaths:
         apiUrl = f"https://api.telegram.org/bot{token}/sendPhoto"
         for path in plotPaths:
+            # Normalizar la ruta para evitar errores por barras invertidas
+            norm_path = path.replace('\\', '/').replace('//', '/')
             try:
-                with open(path, 'rb') as img:
+                with open(norm_path, 'rb') as img:
                     files = {'photo': img}
                     data = {
                         'chat_id': chatId,
@@ -71,9 +73,9 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
                         data['caption'] = caption
                     resp = requests.post(apiUrl, files=files, data=data)
                     if resp.status_code != 200:
-                        messages(f"Error sending photo {path}: {resp.text}", console=1, log=1, telegram=0)
+                        messages(f"Error sending photo {norm_path}: {resp.text}", console=1, log=1, telegram=0)
             except Exception as e:
-                messages(f"Exception sending photo {path}: {e}", console=1, log=1, telegram=0)
+                messages(f"Exception sending photo {norm_path}: {e}", console=1, log=1, telegram=0)
         messages(f"Plots sent: {plotPaths}", console=0, log=1, telegram=0)
     elif text:
         apiUrl = f"https://api.telegram.org/bot{token}/sendMessage"
