@@ -43,7 +43,9 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
                         'bases': [i, j],
                         'ratioAbove': ratioAbove,
                         'ratioBelow': ratioBelow,
-                        'bounce': bounce
+                        'bounce': bounce,
+                        'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
+                        'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
                     })
             # Resistencia (short): slope negativo y % de velas por debajo suficiente
             elif slope < 0:
@@ -62,7 +64,9 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
                         'bases': [i, j],
                         'ratioAbove': ratioAbove,
                         'ratioBelow': ratioBelow,
-                        'bounce': bounce
+                        'bounce': bounce,
+                        'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
+                        'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
                     })
     return opportunities
 
