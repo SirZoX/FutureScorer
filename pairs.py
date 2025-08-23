@@ -221,6 +221,14 @@ def analyzePairs():
                 isRed = df["close"].iat[prev] < df["open"].iat[prev]
                 if not (touchesResistance and isRed):
                     continue
+            # Calculate moving averages
+            df['ma25'] = df['close'].rolling(window=25).mean()
+            df['ma99'] = df['close'].rolling(window=99).mean()
+            
+            # Get previous values for filtering
+            ma25Prev = df['ma25'].iat[prev] if len(df) > 25 and not pd.isna(df['ma25'].iat[prev]) else None
+            ma99Prev = df['ma99'].iat[prev] if len(df) > 99 and not pd.isna(df['ma99'].iat[prev]) else None
+            
             # Calcular score y otros datos igual que antes
             avgVol   = df["volume"].mean() or 1
             volTouch = df["volume"].iat[last]
@@ -254,7 +262,9 @@ def analyzePairs():
                 "minPctBounceAllowed": minPctBounceAllowed,
                 "maxPctBounceAllowed": maxPctBounceAllowed,
                 "bounceLow": lineExp[last] * (1 + minPctBounceAllowed),
-                "bounceHigh": lineExp[last] * (1 + maxPctBounceAllowed)
+                "bounceHigh": lineExp[last] * (1 + maxPctBounceAllowed),
+                "ma25Prev": ma25Prev,
+                "ma99Prev": ma99Prev
             })
         return results
 
@@ -316,6 +326,14 @@ def analyzePairs():
         record = None
         accepted = 0
 
+        # Normalizar el símbolo para plots y Telegram
+        symbolNorm = opp["pair"].replace(":USDT", "")
+
+        # Evitar duplicados: no abrir posición si ya está abierta
+        if opp["pair"] in orderManager.positions:
+            messages(f"Skipping openPosition for {opp['pair']}: position already open", console=1, log=1, telegram=0, pair=opp['pair'])
+            continue
+
         # Investment percentage logic based on score
         score = opp["score"]
         if score > 0.85:
@@ -324,6 +342,31 @@ def analyzePairs():
             investmentPct = 0.7
         else:
             investmentPct = 0.5
+
+        # Validar cantidad mínima antes de abrir la orden
+        # Obtener mínimo desde markets.json si existe
+        minAmount = 0.0
+        try:
+            with open(gvars.marketsFile, encoding='utf-8') as f:
+                marketsData = json.load(f)
+            marketInfo = next((m for m in marketsData.values() if m['symbol'] == opp['pair']), None)
+            if marketInfo:
+                minAmount = float(marketInfo.get('info', {}).get('minAmount', 0.0))
+        except Exception:
+            minAmount = 0.0
+
+        # Calcular cantidad a invertir
+        entryPrice = opp["entryPrice"]
+        usdcInvestment = configData["usdcInvestment"] * investmentPct
+        amountToOpen = usdcInvestment / entryPrice if entryPrice else 0
+        if minAmount > 0 and amountToOpen < minAmount:
+            messages(f"Error: amount of {opp['pair']} ({amountToOpen:.4f}) is less than minimum allowed ({minAmount})", console=1, log=1, telegram=0, pair=opp['pair'])
+            continue
+
+        # Calculate filter results for logging
+        filter1Passed = False  # Basic technical criteria
+        filter2Passed = False  # Entry-specific criteria
+        filter1Passed = (opp["score"] >= scoreThreshold and posicionesYaAbiertas + nuevasAbiertas < configData["maxOpenPositions"])
 
         # Attempt to open position according to filters
         rejected = False
@@ -359,6 +402,10 @@ def analyzePairs():
             except Exception as e:
                 messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE check error: {e}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
+
+        # After basic filters, check entry-specific criteria for filter2
+        filter2Passed = filter1Passed and not rejected
+
         if not rejected:
             if not (opp["bounceLow"] <= opp["entryPrice"] <= opp["bounceHigh"]):
                 bl, bh, ep = opp["bounceLow"], opp["bounceHigh"], opp["entryPrice"]
@@ -371,21 +418,26 @@ def analyzePairs():
                 else:
                     messages(f"  ⚠️  {opp['pair']} rejected by RANGE: entryPrice {ep:.6f} not in [{bl:.6f}, {bh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
+                filter2Passed = False
             elif opp.get("ma25Prev") is None or opp.get("ma99Prev") is None:
                 messages(f"  ⚠️  {opp['pair']} rejected: MA25prev or MA99prev is None", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
+                filter2Passed = False
             elif opp["entryPrice"] <= opp["ma25Prev"]:
                 ep, mp = opp["entryPrice"], opp["ma25Prev"]
                 messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA25: entryPrice {ep:.6f} <= MA25prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
+                filter2Passed = False
             elif opp["entryPrice"] <= opp["ma99Prev"]:
                 ep, mp = opp["entryPrice"], opp["ma99Prev"]
                 messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA99: entryPrice {ep:.6f} <= MA99prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
+                filter2Passed = False
         record = None
         accepted = 0
         if not rejected:
             # 5e) Open position with investmentPct
+            # Preparar para quitar ReduceOnly en modo Hedge (debe hacerse en orderManager/connector)
             record = orderManager.openPosition(opp["pair"], slope=opp.get("slope"), intercept=opp.get("intercept"), investmentPct=investmentPct)
             if record:
                 nuevasAbiertas += 1
@@ -406,7 +458,7 @@ def analyzePairs():
                     if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
                         plotPath = plotting.savePlot(item)
                         caption = (
-                            f"{record['symbol']}\n"
+                            f"{symbolNorm}\n"
                             f"Investment: {configData['usdcInvestment']} USDC ({investmentPct*100:.0f}%)\n"
                             f"Entry Price: {record['openPrice']}\n"
                             f"TP: {record['tpPrice']}\n"
@@ -446,9 +498,6 @@ def analyzePairs():
             messages(f"Error saving plot for {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
 
         # ——— 7) Loguear en selectionLog.csv ———
-        # Uso antiguo de campos, ahora comentado
-        # tpId = (record or {}).get("tpOrderId", "")
-        # slId = (record or {}).get("slOrderId", "")
         tpId = (record or {}).get("tpOrderId2") or (record or {}).get("tpOrderId1", "")
         slId = (record or {}).get("slOrderId2") or (record or {}).get("slOrderId1", "")
         oppId = f"{tpId}-{slId}"
@@ -456,11 +505,14 @@ def analyzePairs():
         tsUnix = int(datetime.utcnow().timestamp())
         w = scoringWeights
 
+        # Add filter status to opportunity for logging
+        opp["filter1Passed"] = filter1Passed
+        opp["filter2Passed"] = filter2Passed
         line = ";".join([
             oppId,
             tsIso,
             str(tsUnix),
-            opp["pair"],
+            symbolNorm,
             helpers.fmt(opp["distancePct"], 6),
             helpers.fmt(opp["volumeRatio"], 6),
             helpers.fmt(opp["momentum"], 6),
