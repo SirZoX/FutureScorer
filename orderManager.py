@@ -374,9 +374,10 @@ class OrderManager:
         minQty   = Decimal(ls.get('minQty','0')) or None
 
         amtDec = rawAmt.quantize(stepSize, rounding=ROUND_DOWN) if stepSize else rawAmt
+        # Si la cantidad calculada es menor que el mínimo, usar el mínimo permitido
         if minQty and amtDec < minQty:
-            messages(f"Amount {amtDec} below minimum lot size {minQty}", console=1, log=1, telegram=0, pair=symbol)
-            return None
+            messages(f"Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=1, log=1, telegram=0, pair=symbol)
+            amtDec = minQty
         amount = float(amtDec)
         messages(f"  ➡️   Opening {symbol}: price={price}, amount={amtDec}", pair=symbol, console=1, log=1, telegram=0)
 
