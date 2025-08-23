@@ -250,7 +250,9 @@ def analyzePairs():
                 "momentum": momentum,
                 "entryPrice": closeLast,
                 "bases": opp['bases'],
-                "csvPath": fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else ""
+                "csvPath": fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else "",
+                "minPctBounceAllowed": minPctBounceAllowed,
+                "maxPctBounceAllowed": maxPctBounceAllowed
             })
         return results
 
