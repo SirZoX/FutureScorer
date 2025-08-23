@@ -319,7 +319,7 @@ class OrderManager:
         Market buy with CCXT, then place OCO sell (TP + SL) with python-binance.
         Never open more than one trade for the same symbol per run.
         """
-        messages(f"[DEBUG] symbol recibido: {symbol}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] symbol recibido: {symbol}", console=0, log=1, telegram=0)
         # 0) If we've already flagged insufficient balance, skip
         if self.hadInsufficientBalance:
             binSym = symbol.replace('/', '')
@@ -512,6 +512,8 @@ class OrderManager:
             plot_path = savePlot(item)
             # Normalizar ruta del plot para Windows y Telegram
             plot_path = plot_path.replace('\\', '/').replace('\\', '/').replace('//', '/')
+            # Eliminar sufijo _USDT si existe en el nombre del plot
+            plot_path = plot_path.replace('_USDT.png', '.png').replace('_USDT', '')
             percent = int(investmentPct * 100)
             caption = f"{symbol}\nInvestment: {investUSDC:.0f} USDC ({percent}%)\nEntry Price: {float(openPrice):.3f}\nTP: {float(tpPrice):.3f}\nSL: {float(slPrice):.3f}"
             sendPlotsByTelegram([plot_path], caption=caption)
