@@ -478,9 +478,10 @@ class OrderManager:
         # Enviar plot por Telegram tras abrir posición
         try:
             import glob
+            import os
             csv_path = None
             safe_pair = symbol.replace('/', '_')
-            pattern = f"{csvFolder}/{safe_pair}_*.csv"
+            pattern = os.path.join(csvFolder, f"{safe_pair}_*.csv")
             csv_files = glob.glob(pattern)
             if csv_files:
                 csv_path = max(csv_files, key=os.path.getmtime)
@@ -491,7 +492,7 @@ class OrderManager:
             oppData = record.get('opp', {}) if 'opp' in record else {}
             item = {
                 'csvPath': csv_path,
-                'pair': symbol,
+                'pair': safe_pair,
                 'slope': slope,
                 'intercept': intercept,
                 'minPctBounceAllowed': float(self.config.get('minPctBounceAllowed', 0.003)),
@@ -506,7 +507,8 @@ class OrderManager:
                 'score': oppData.get('score')
             }
             plot_path = savePlot(item)
-            # Construir caption informativo
+            # Normalizar ruta del plot para Windows y Telegram
+            plot_path = plot_path.replace('\\', '/').replace('\\', '/').replace('//', '/')
             percent = int(investmentPct * 100)
             caption = f"{symbol}\nInvestment: {investUSDC:.0f} USDC ({percent}%)\nEntry Price: {float(openPrice):.3f}\nTP: {float(tpPrice):.3f}\nSL: {float(slPrice):.3f}"
             sendPlotsByTelegram([plot_path], caption=caption)
