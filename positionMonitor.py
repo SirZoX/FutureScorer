@@ -84,10 +84,10 @@ def syncOpenedPositions():
     Syncs openedPositions.json with actual open positions in BingX.
     Removes from the file any position that is not open in the exchange.
     """
-    import ccxt
     from connector import bingxConnector
     from gvars import positionsFile
     from logManager import messages
+    import time
     try:
         with open(positionsFile, encoding='utf-8') as f:
             positions = json.load(f)
@@ -95,31 +95,28 @@ def syncOpenedPositions():
         messages(f"[SYNC] Error loading positions: {e}", console=1, log=1, telegram=1)
         return
     exchange = bingxConnector()
-    try:
-        # Fetch open positions from BingX
-        openPositions = exchange.fetch_positions()
-        openSymbols = set()
-        for pos in openPositions:
-            symbol = pos.get('symbol')
-            if symbol:
-                openSymbols.add(symbol)
-        # Remove from file any position not open in BingX
-        toRemove = []
-        for symbol in list(positions.keys()):
-            # Normaliza el símbolo para comparar
-            normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
-            if normSymbol not in openSymbols:
-                toRemove.append(symbol)
-        if toRemove:
-            for symbol in toRemove:
+    toRemove = []
+    for symbol in list(positions.keys()):
+        normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
+        try:
+            # Llama a fetch_positions solo para el símbolo concreto
+            posList = exchange.fetch_positions([normSymbol])
+            # Si no hay posición abierta para ese símbolo, lo eliminamos
+            if not posList or all(p.get('contracts', 0) == 0 for p in posList):
                 messages(f"[SYNC] Eliminando posición cerrada: {symbol}", console=1, log=1, telegram=0)
-                positions.pop(symbol)
-            with open(positionsFile, 'w', encoding='utf-8') as f:
-                json.dump(positions, f, indent=2, default=str)
-        else:
-            messages("[SYNC] Todas las posiciones del fichero están abiertas en BingX", console=1, log=1, telegram=0)
-    except Exception as e:
-        messages(f"[SYNC] Error sincronizando posiciones con BingX: {e}", console=1, log=1, telegram=1)
+                toRemove.append(symbol)
+            # Espera breve para evitar rate limit
+            time.sleep(0.5)
+        except Exception as e:
+            messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
+            continue
+    if toRemove:
+        for symbol in toRemove:
+            positions.pop(symbol)
+        with open(positionsFile, 'w', encoding='utf-8') as f:
+            json.dump(positions, f, indent=2, default=str)
+    else:
+        messages("[SYNC] Todas las posiciones del fichero están abiertas en BingX", console=1, log=1, telegram=0)
 
 import json
 import time
