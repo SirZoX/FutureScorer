@@ -260,24 +260,43 @@ def analyzePairs():
             res = fut.result()
             if res:
                 # Si es oportunidad válida, añadir a opportunities
-                if 'score' in res:
-                    opportunities.append(res)
-                # Si es descarte, loguear solo en log y guardar plot
-                elif 'reason' in res:
-                    messages(f"{res['pair']} descartada: {res['reason']}", console=0, log=1, telegram=0, pair=res['pair'])
-                    # Guardar plot de descarte si hay datos
-                    if 'csvPath' in res and res['csvPath']:
-                        item = {
-                            'pair': f"DISCARD_{res['pair']}",
-                            'csvPath': res['csvPath'],
-                            'slope': res.get('slope', 0),
-                            'intercept': res.get('intercept', 0),
-                            'type': 'discard'
-                        }
-                        try:
-                            plotting.savePlot(item)
-                        except Exception as e:
-                            messages(f"Error saving plot for {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
+                if isinstance(res, list):
+                    for r in res:
+                        if 'score' in r:
+                            opportunities.append(r)
+                        elif 'reason' in r:
+                            messages(f"{r['pair']} descartada: {r['reason']}", console=0, log=1, telegram=0, pair=r['pair'])
+                            # Guardar plot de descarte si hay datos
+                            if 'csvPath' in r and r['csvPath']:
+                                item = {
+                                    'pair': f"DISCARD_{r['pair']}",
+                                    'csvPath': r['csvPath'],
+                                    'slope': r.get('slope', 0),
+                                    'intercept': r.get('intercept', 0),
+                                    'type': 'discard'
+                                }
+                                try:
+                                    plotting.savePlot(item)
+                                except Exception as e:
+                                    messages(f"Error saving plot for {r['pair']}: {e}", console=0, log=1, telegram=0, pair=r['pair'])
+                else:
+                    if 'score' in res:
+                        opportunities.append(res)
+                    elif 'reason' in res:
+                        messages(f"{res['pair']} descartada: {res['reason']}", console=0, log=1, telegram=0, pair=res['pair'])
+                        # Guardar plot de descarte si hay datos
+                        if 'csvPath' in res and res['csvPath']:
+                            item = {
+                                'pair': f"DISCARD_{res['pair']}",
+                                'csvPath': res['csvPath'],
+                                'slope': res.get('slope', 0),
+                                'intercept': res.get('intercept', 0),
+                                'type': 'discard'
+                            }
+                            try:
+                                plotting.savePlot(item)
+                            except Exception as e:
+                                messages(f"Error saving plot for {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
 
     # 3) Sort by score descending
     ordered = sorted(opportunities, key=lambda o: o["score"], reverse=True)
