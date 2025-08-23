@@ -386,8 +386,8 @@ class OrderManager:
         orderSide = 'buy' if side == 'long' else 'sell'
         positionSide = 'LONG' if side == 'long' else 'SHORT'
         try:
-            # Set leverage for symbol (BingX requiere side, usar siempre BOTH)
-            self.exchange.set_leverage(leverage, symbol, 'BOTH')
+            # Set leverage for symbol (BingX requiere side como keyword argument)
+            self.exchange.set_leverage(leverage, symbol, side='BOTH')
             # Operativa spot (comentada)
             # buyResp = self.exchange.create_market_buy_order(symbol, amount, params={'newClientOrderId': clientId})
             # Operativa futuros
