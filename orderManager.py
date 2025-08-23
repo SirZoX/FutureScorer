@@ -522,4 +522,38 @@ class OrderManager:
         self.savePositions()
         return record
 
+        # 5) Place stop loss and take profit orders (futuros BingX)
+        # Solo si la orden principal se ejecutó correctamente
+        if order and order.get('status') == 'closed':
+            # Calcula precios de SL y TP según lógica del bot
+            stopLossPrice = round(price * (1 - stopLossPerc/100), 5) if side == 'long' else round(price * (1 + stopLossPerc/100), 5)
+            takeProfitPrice = round(price * (1 + takeProfitPerc/100), 5) if side == 'long' else round(price * (1 - takeProfitPerc/100), 5)
+            # Orden STOP_MARKET (stop loss)
+            try:
+                slOrder = self.connector.createOrder(
+                    symbol=symbol,
+                    type='STOP_MARKET',
+                    side='sell' if side == 'long' else 'buy',
+                    amount=amount,
+                    price=stopLossPrice,
+                    params={'stopPrice': stopLossPrice, 'reduceOnly': True}
+                )
+                messages(f"[INFO] Stop loss order creada: {slOrder}", log=1)
+            except Exception as e:
+                messages(f"[ERROR] Error creando stop loss: {e}", log=1)
+            # Orden TAKE_PROFIT_MARKET (take profit)
+            try:
+                tpOrder = self.connector.createOrder(
+                    symbol=symbol,
+                    type='TAKE_PROFIT_MARKET',
+                    side='sell' if side == 'long' else 'buy',
+                    amount=amount,
+                    price=takeProfitPrice,
+                    params={'stopPrice': takeProfitPrice, 'reduceOnly': True}
+                )
+                messages(f"[INFO] Take profit order creada: {tpOrder}", log=1)
+            except Exception as e:
+                messages(f"[ERROR] Error creando take profit: {e}", log=1)
+        # ...existing code...
+
 
