@@ -15,5 +15,6 @@
 - Always read all files in the project, even if you are only modifying one file. This ensures that you understand the context and can apply the coding standards consistently.
 - Always read files completely, even if they are large. This helps ensure that you do not miss any important context or details that could affect your modifications.
 - Bever delete code when refactoring or modifying files. If you find code that is not needed, comment it out instead of deleting it and notice me. This allows for easier debugging and understanding of the code's history.
+- When I paste an error, never ask me if I want you to made changes, assume yes
 
 You may copy this file to any project to enforce these universal AI coding standards.

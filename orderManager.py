@@ -319,16 +319,14 @@ class OrderManager:
         Market buy with CCXT, then place OCO sell (TP + SL) with python-binance.
         Never open more than one trade for the same symbol per run.
         """
+        messages(f"[DEBUG] symbol recibido: {symbol}", console=1, log=1, telegram=0)
         # 0) If we've already flagged insufficient balance, skip
         if self.hadInsufficientBalance:
-            # English comment: binSym is the Binance symbol format without slash
             binSym = symbol.replace('/', '')
             return None
 
         # 1) Refresh and reconcile open positions
         self.updatePositions()
-        # Log de intento de apertura de posición
-        #messages(f"[DEBUG] Attempting to open position for {symbol}", pair=symbol, console=1, log=1, telegram=0)
         if symbol in self.positions:
             messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
             return None
@@ -343,7 +341,6 @@ class OrderManager:
         availableUSDC = float(free.get(self.baseAsset, 0) or 0)
         baseInvestment = float(self.config.get('usdcInvestment', 0))
         investUSDC = baseInvestment * investmentPct
-        # Exception: if investmentPct is 1.0 (100%) and not enough balance, use all available
         if availableUSDC < investUSDC:
             if investmentPct == 1.0 and availableUSDC > 0:
                 messages(f"[EXCEPCIÓN] No hay saldo suficiente para 100% de inversión, usando todo el saldo disponible: {availableUSDC:.6f} USDC", console=1, log=1, telegram=0, pair=symbol)
@@ -366,23 +363,26 @@ class OrderManager:
         # 4) Compute how much base asset to buy
         quoteQty = Decimal(str(investUSDC))
         rawAmt = quoteQty / price
-        # Normalizar símbolo para buscar en markets.json
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
+        messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=1, log=1, telegram=0)
         info = self.markets.get(normSymbol, {}).get('info', {})
-        pf = next((f for f in info.get('filters', []) if f['filterType']=='PRICE_FILTER'), {})
-        ls = next((f for f in info.get('filters', []) if f['filterType']=='LOT_SIZE'), {})
-        tickSize = Decimal(pf.get('tickSize','0')) or None
-        stepSize = Decimal(ls.get('stepSize','0')) or None
-        minQty   = Decimal(ls.get('minQty','0')) or None
-
+        messages(f"[DEBUG] info markets: {json.dumps(info, indent=2)}", console=1, log=1, telegram=0)
+        pf = next((f for f in info.get('filters', []) if f.get('filterType') == 'PRICE_FILTER'), {})
+        ls = next((f for f in info.get('filters', []) if f.get('filterType') == 'LOT_SIZE'), {})
+        tickSize = Decimal(pf.get('tickSize', info.get('tickSize', '0'))) or None
+        stepSize = Decimal(ls.get('stepSize', info.get('stepSize', '0'))) or None
+        minQty   = Decimal(ls.get('minQty', info.get('minQty', '0'))) or None
+        messages(f"[DEBUG] minQty: {minQty}, stepSize: {stepSize}, tickSize: {tickSize}", console=1, log=1, telegram=0)
+        messages(f"[DEBUG] rawAmt calculado: {rawAmt}", console=1, log=1, telegram=0)
         amtDec = rawAmt.quantize(stepSize, rounding=ROUND_DOWN) if stepSize else rawAmt
+        messages(f"[DEBUG] amtDec tras quantize: {amtDec}", console=1, log=1, telegram=0)
         # Si la cantidad calculada es menor que el mínimo, usar el mínimo permitido y recalcular inversión
         if minQty and amtDec < minQty:
-            messages(f"Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=1, log=1, telegram=0, pair=symbol)
+            messages(f"[DEBUG] Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=1, log=1, telegram=0, pair=symbol)
             amtDec = minQty
             investUSDC = float(minQty) * float(price)
         amount = float(amtDec)
-        messages(f"  ➡️   Opening {symbol}: price={price}, amount={amtDec}, usdc={investUSDC}", pair=symbol, console=1, log=1, telegram=0)
+        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, usdc={investUSDC}", pair=symbol, console=1, log=1, telegram=0)
 
         # 5) Place futures order (long/short)
         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
