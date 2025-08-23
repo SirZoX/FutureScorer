@@ -514,6 +514,8 @@ class OrderManager:
             plot_path = plot_path.replace('\\', '/').replace('\\', '/').replace('//', '/')
             # Eliminar sufijo _USDT si existe en el nombre del plot
             plot_path = plot_path.replace('_USDT.png', '.png').replace('_USDT', '')
+            print(f"[DEBUG][openPosition] plot_path enviado a Telegram para {symbol}: {plot_path}")
+            messages(f"[DEBUG][openPosition] plot_path enviado a Telegram para {symbol}: {plot_path}", pair=symbol, console=1, log=1, telegram=0)
             percent = int(investmentPct * 100)
             caption = f"{symbol}\nInvestment: {investUSDC:.0f} USDC ({percent}%)\nEntry Price: {float(openPrice):.3f}\nTP: {float(tpPrice):.3f}\nSL: {float(slPrice):.3f}"
             sendPlotsByTelegram([plot_path], caption=caption)
