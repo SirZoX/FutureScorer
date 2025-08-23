@@ -119,8 +119,7 @@ def syncOpenedPositions():
             positions.pop(symbol)
         with open(positionsFile, 'w', encoding='utf-8') as f:
             json.dump(positions, f, indent=2, default=str)
-    else:
-        messages("[SYNC] Todas las posiciones del fichero están abiertas en BingX", console=1, log=1, telegram=0)
+    # Eliminado el log innecesario
 
 import json
 import time
