@@ -274,13 +274,17 @@ def printPositionsTable():
         print(f"{hora:19} | {symbol} | {tpPercentStr:>5} {slPercentStr:>5} | {colorText(pctStr, pctColor):>10} | {investStr:>14} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
 
 def monitorPositions():
+    from logManager import messages
     while True:
         monitorActive.wait()  # Wait until monitor is enabled
+        try:
+            syncOpenedPositions()  # Sincroniza y limpia el fichero antes de mostrar la tabla
+        except Exception as e:
+            messages(f"[SYNC] Error ejecutando syncOpenedPositions: {e}", console=1, log=1, telegram=1)
         printPositionsTable()
         try:
             manageDynamicTpSl()
         except Exception as e:
-            from logManager import messages
             messages(f"[DYN-TP/SL] Error en manageDynamicTpSl: {e}", console=1, log=1, telegram=1)
         time.sleep(10)
 if __name__ == '__main__':
