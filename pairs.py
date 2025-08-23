@@ -328,6 +328,9 @@ def analyzePairs():
 
         # Normalizar el símbolo para plots y Telegram
         symbolNorm = opp["pair"].replace(":USDT", "")
+        # Determinar tipo de operación para el nombre del plot
+        plotType = opp.get("type", "LONG").upper()
+        plotFileName = f"{plotType}_{symbolNorm}.png"
 
         # Evitar duplicados: no abrir posición si ya está abierta
         if opp["pair"] in orderManager.positions:
@@ -456,7 +459,10 @@ def analyzePairs():
                 try:
                     # Solo generar plot si el CSV tiene datos
                     if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
-                        plotPath = plotting.savePlot(item)
+                        # Generar el plot y usar el nombre normalizado
+                        plotPath = os.path.join(gvars.plotsFolder, plotFileName)
+                        # Guardar el plot usando el nombre normalizado
+                        plotting.savePlot({**item, 'plotPath': plotPath})
                         caption = (
                             f"{symbolNorm}\n"
                             f"Investment: {configData['usdcInvestment']} USDC ({investmentPct*100:.0f}%)\n"
@@ -466,7 +472,7 @@ def analyzePairs():
                         )
                         messages([plotPath], console=0, log=1, telegram=2, caption=caption)
                 except Exception as e:
-                    messages(f"Error generating plot for {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
+                    messages(f"Error generating plot for {symbolNorm}: {e}", console=1, log=1, telegram=0, pair=symbolNorm)
             else:
                 messages(f"{opp['pair']} openPosition returned None", console=0, log=0, telegram=0, pair=opp['pair'])
 

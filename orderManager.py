@@ -431,8 +431,7 @@ class OrderManager:
                 amount=float(filled),
                 params={
                     'stopPrice': float(tpPrice),
-                    'positionSide': positionSide,
-                    'reduceOnly': True
+                    'positionSide': positionSide
                 }
             )
             tpId = tpOrder.get('id')
@@ -447,8 +446,7 @@ class OrderManager:
                 amount=float(filled),
                 params={
                     'stopPrice': float(slPrice),
-                    'positionSide': positionSide,
-                    'reduceOnly': True
+                    'positionSide': positionSide
                 }
             )
             slId = slOrder.get('id')
