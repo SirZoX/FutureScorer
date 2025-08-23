@@ -438,7 +438,7 @@ class OrderManager:
                 }
             )
             tpId = tpOrder.get('id')
-            messages(f"[INFO] TP order creada: {tpOrder}", log=1)
+            # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando TP: {e}", log=1)
         try:
@@ -453,7 +453,7 @@ class OrderManager:
                 }
             )
             slId = slOrder.get('id')
-            messages(f"[INFO] SL order creada: {slOrder}", log=1)
+            # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando SL: {e}", log=1)
 
