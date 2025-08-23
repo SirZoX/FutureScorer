@@ -366,7 +366,9 @@ class OrderManager:
         # 4) Compute how much base asset to buy
         quoteQty = Decimal(str(investUSDC))
         rawAmt = quoteQty / price
-        info = self.markets.get(symbol, {}).get('info', {})
+        # Normalizar símbolo para buscar en markets.json
+        normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
+        info = self.markets.get(normSymbol, {}).get('info', {})
         pf = next((f for f in info.get('filters', []) if f['filterType']=='PRICE_FILTER'), {})
         ls = next((f for f in info.get('filters', []) if f['filterType']=='LOT_SIZE'), {})
         tickSize = Decimal(pf.get('tickSize','0')) or None
