@@ -362,9 +362,10 @@ def analyzePairs():
         entryPrice = opp["entryPrice"]
         usdcInvestment = configData["usdcInvestment"] * investmentPct
         amountToOpen = usdcInvestment / entryPrice if entryPrice else 0
+        # Si la cantidad calculada es menor que la mínima, usar la mínima requerida
         if minAmount > 0 and amountToOpen < minAmount:
-            messages(f"Error: amount of {opp['pair']} ({amountToOpen:.4f}) is less than minimum allowed ({minAmount})", console=1, log=1, telegram=0, pair=opp['pair'])
-            continue
+            messages(f"Cantidad calculada para {opp['pair']} ({amountToOpen:.4f}) es menor que el mínimo permitido ({minAmount}), usando el mínimo.", console=1, log=1, telegram=0, pair=opp['pair'])
+            amountToOpen = minAmount
 
         # Calculate filter results for logging
         filter1Passed = False  # Basic technical criteria
