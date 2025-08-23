@@ -97,15 +97,17 @@ def syncOpenedPositions():
     exchange = bingxConnector()
     toRemove = []
     for symbol in list(positions.keys()):
+        # Normaliza ambos formatos para comparar
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
+        altSymbol = normSymbol + ':USDT' if not symbol.endswith(':USDT') else normSymbol
         try:
-            # Llama a fetch_positions solo para el símbolo concreto
-            posList = exchange.fetch_positions([normSymbol])
-            # Si no hay posición abierta para ese símbolo, lo eliminamos
-            if not posList or all(p.get('contracts', 0) == 0 for p in posList):
+            # Llama a fetch_open_orders para ambos formatos
+            orders_norm = exchange.fetch_open_orders(normSymbol)
+            orders_alt = exchange.fetch_open_orders(altSymbol)
+            # Si no hay órdenes abiertas en ninguno, elimina del fichero
+            if not orders_norm and not orders_alt:
                 messages(f"[SYNC] Eliminando posición cerrada: {symbol}", console=1, log=1, telegram=0)
                 toRemove.append(symbol)
-            # Espera breve para evitar rate limit
             time.sleep(0.5)
         except Exception as e:
             messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
