@@ -58,10 +58,11 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
         messages("Telegram credentials missing; skipping Telegram send.", console=1, log=1, telegram=0)
         return
     if plotPaths:
+        print(f"[DEBUG][sendTelegramMessage] plotPaths recibidos: {plotPaths}")
         apiUrl = f"https://api.telegram.org/bot{token}/sendPhoto"
         for path in plotPaths:
-            # Normalizar la ruta para evitar errores por barras invertidas
             norm_path = path.replace('\\', '/').replace('//', '/')
+            print(f"[DEBUG][sendTelegramMessage] norm_path usado: {norm_path}")
             try:
                 with open(norm_path, 'rb') as img:
                     files = {'photo': img}
@@ -76,6 +77,7 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
                         messages(f"Error sending photo {norm_path}: {resp.text}", console=1, log=1, telegram=0)
             except Exception as e:
                 messages(f"Exception sending photo {norm_path}: {e}", console=1, log=1, telegram=0)
+        print(f"[DEBUG][sendTelegramMessage] Plots enviados: {plotPaths}")
         messages(f"Plots sent: {plotPaths}", console=0, log=1, telegram=0)
     elif text:
         apiUrl = f"https://api.telegram.org/bot{token}/sendMessage"

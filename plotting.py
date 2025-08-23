@@ -116,6 +116,8 @@ def savePlot(item):
             prefix = 'LONG_' if item.get('type') == 'long' else 'SHORT_'
             plotFile = f"{prefix}{basePair}.png"
         plotPath = os.path.join(gvars.plotsFolder, plotFile)
+        print(f"[DEBUG][savePlot] plotFile generado: {plotFile}")
+        print(f"[DEBUG][savePlot] plotPath generado: {plotPath}")
     # Mark bounce point with red 'X'
     if bounceIdx is not None:
         xPoint = df['timestampNum'].iat[bounceIdx]
@@ -190,10 +192,12 @@ def savePlot(item):
     # Save and close
     try:
         fig.savefig(plotPath)
+        print(f"[DEBUG][savePlot] plot guardado en: {plotPath}")
         #messages(f"Plot saved: {plotPath}", console=0, log=1, telegram=0, pair=item.get('pair'))
     except Exception as e:
         messages(f"Error saving plot image: {e}", console=1, log=1, telegram=0, pair=item.get('pair'))
         raise
     finally:
         plt.close(fig)
+    print(f"[DEBUG][savePlot] return plotPath: {plotPath}")
     return plotPath
