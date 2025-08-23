@@ -217,17 +217,16 @@ def analyzePairs():
                 "intercept": intercept
             }
 
-        last, prev = len(df)-1, len(df)-2
-        lowLast, expLast     = df["low"].iat[last],   lineExp[last]
-        lowPrev, expPrev     = df["low"].iat[prev],   lineExp[prev]
-        closeLast, openLast  = df["close"].iat[last], df["open"].iat[last]
-        closePrev, openPrev  = df["close"].iat[prev], df["open"].iat[prev]
+        last, prev, prev2 = len(df)-1, len(df)-2, len(df)-3
+        lowLast, expLast = df["low"].iat[last], lineExp[last]
+        lowPrev2, expPrev2 = df["low"].iat[prev2], lineExp[prev2]
+        closePrev, openPrev = df["close"].iat[prev], df["open"].iat[prev]
         tolerance = tolerancePct if 'tolerancePct' in locals() else 0.015
-        # English comment: Only consider opportunity if previous candle touches support and last candle is green
-        touchesSupport = abs(lowPrev - expPrev) <= abs(expPrev) * tolerance
-        isGreen = closeLast > openLast
+        # English comment: Only consider opportunity if N-2 touches/crosses support and N-1 is green
+        touchesSupport = abs(lowPrev2 - expPrev2) <= abs(expPrev2) * tolerance
+        isGreen = closePrev > openPrev
         if not (touchesSupport and isGreen):
-            return {"pair": pair, "reason": "No opportunity: last candle not green or not touching support"}
+            return {"pair": pair, "reason": "No opportunity: N-2 not touching support or N-1 not green"}
         avgVol   = df["volume"].mean() or 1
         volTouch = df["volume"].iat[last]
         closeLast = df["close"].iat[last]
