@@ -20,7 +20,7 @@ import fileManager
 import helpers
 
 from logManager import messages
-from supportDetector import findSupportLine
+from supportDetector import findPossibleResistancesAndSupports
 from marketLoader import markets
 
 
@@ -196,103 +196,63 @@ def analyzePairs():
                 df = df.iloc[:-1]
 
         df = filter_signals(df)
-        slope, intercept, touchesCount, lineExp, bases = findSupportLine(
+        # Detectar oportunidades long y short
+        opps = findPossibleResistancesAndSupports(
             df["low"].values,
             df["close"].values,
             df["open"].values,
             tolerancePct=tolerancePct,
             minSeparation=minCandlesSeparationToFindSupportLine,
-            minTouches=minTouches
+            minTouches=minTouches,
+            closeViolationPct=0.02
         )
-        if len(bases) != 2:
-            # Guardar CSV siempre que haya datos OHLCV
-            csvPath = None
-            if ohlcv and len(ohlcv) > 0:
-                csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
-            return {
+        results = []
+        for opp in opps:
+            # Validar criterios finales para long y short
+            last, prev, prev2 = len(df)-1, len(df)-2, len(df)-3
+            lineExp = opp['lineExp']
+            if opp['type'] == 'long':
+                touchesSupport = abs(df["low"].iat[prev2] - lineExp[prev2]) <= abs(lineExp[prev2]) * tolerancePct
+                isGreen = df["close"].iat[prev] > df["open"].iat[prev]
+                if not (touchesSupport and isGreen):
+                    continue
+            elif opp['type'] == 'short':
+                touchesResistance = abs(df["high"].iat[prev2] - lineExp[prev2]) <= abs(lineExp[prev2]) * tolerancePct
+                isRed = df["close"].iat[prev] < df["open"].iat[prev]
+                if not (touchesResistance and isRed):
+                    continue
+            # Calcular score y otros datos igual que antes
+            avgVol   = df["volume"].mean() or 1
+            volTouch = df["volume"].iat[last]
+            closeLast = df["close"].iat[last]
+            volUsdc = volTouch * closeLast
+            if volUsdc < lastCandleMinUSDVolume:
+                continue
+            distance = abs(df["low"].iat[last] - lineExp[last]) if opp['type']=='long' else abs(df["high"].iat[last] - lineExp[last])
+            distancePct = distance / lineExp[last] if lineExp[last] else 0
+            volumeRatio = volTouch / avgVol
+            momentum    = (df["close"].iat[last] - df["close"].iat[prev]) / df["close"].iat[prev] if df["close"].iat[prev] else 0
+            score = (
+                scoringWeights["distance"] * (1 - distancePct) +
+                scoringWeights["volume"]   * min(volumeRatio, 2) +
+                scoringWeights["momentum"] * max(momentum, 0) +
+                scoringWeights["touches"]  * min(opp['touchCount'] / minTouches, 1)
+            )
+            results.append({
                 "pair": pair,
-                "reason": "No valid support/resistance line found",
-                "csvPath": csvPath,
-                "slope": slope,
-                "intercept": intercept
-            }
-
-        last, prev, prev2 = len(df)-1, len(df)-2, len(df)-3
-        lowLast, expLast = df["low"].iat[last], lineExp[last]
-        lowPrev2, expPrev2 = df["low"].iat[prev2], lineExp[prev2]
-        closePrev, openPrev = df["close"].iat[prev], df["open"].iat[prev]
-        tolerance = tolerancePct if 'tolerancePct' in locals() else 0.015
-        # English comment: Only consider opportunity if N-2 touches/crosses support and N-1 is green
-        touchesSupport = abs(lowPrev2 - expPrev2) <= abs(expPrev2) * tolerance
-        isGreen = closePrev > openPrev
-        if not (touchesSupport and isGreen):
-            return {"pair": pair, "reason": "No opportunity: N-2 not touching support or N-1 not green"}
-        avgVol   = df["volume"].mean() or 1
-        volTouch = df["volume"].iat[last]
-        closeLast = df["close"].iat[last]
-        # Calcular volumen en USDC de la última vela
-        volUsdc = volTouch * closeLast
-        # if volUsdc < minVolume:
-        #     messages(f"  ⚠️  {pair} ignorado por volumen USDC bajo: {volUsdc:.2f} < minVolume {minVolume}", console=1, log=1, telegram=0, pair=pair)
-        #     return None
-        if volUsdc < lastCandleMinUSDVolume:
-            return {"pair": pair, "reason": f"Low volume: {volUsdc:.2f} < lastCandleMinUSDVolume {lastCandleMinUSDVolume}"}
-        distance = abs(lowLast - expLast)
-        distancePct = distance / expLast if expLast else 0
-        volumeRatio = volTouch / avgVol
-        momentum    = (closeLast - closePrev) / closePrev if closePrev else 0
-
-        score = (
-            scoringWeights["distance"] * (1 - distancePct) +
-            scoringWeights["volume"]   * min(volumeRatio, 2) +
-            scoringWeights["momentum"] * max(momentum, 0) +
-            scoringWeights["touches"]  * min(touchesCount / minTouches, 1)
-        )
-
-        # Guardar CSV solo si hay datos
-        if ohlcv and len(ohlcv) > 0:
-            csvPath = fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles)
-        else:
-            csvPath = None
-
-        # calcular MA25prev y bounce bounds
-        ma25 = df["close"].rolling(25).mean()
-        ma25Prev = float(ma25.iat[-2]) if len(ma25) >= 2 else None
-        ma99 = df["close"].rolling(99).mean()
-        ma99Prev = float(ma99.iat[-2]) if len(ma99) >= 2 else None
-        # bounceLow  = expLast * (1 + bouncePct)
-        # bounceHigh = expLast * (1 + maxBounceAllowed)
-        bounceLow  = expLast * (1 + minPctBounceAllowed)
-        bounceHigh = expLast * (1 + maxPctBounceAllowed)
-        filter1 = bounceLow <= closeLast <= bounceHigh
-        filter2 = (ma25Prev is not None and closeLast > ma25Prev)
-        filter3 = (ma99Prev is not None and closeLast > ma99Prev)
-
-        return {
-            "pair":             pair,
-            "csvPath":          csvPath if csvPath else "",
-            "slope":            slope,
-            "intercept":        intercept,
-            "touchesCount":     touchesCount,
-            "score":            score,
-            "distancePct":      distancePct,
-            "volumeRatio":      volumeRatio,
-            "momentum":         momentum,
-            "entryPrice":       closeLast,
-            "bases":            bases,
-            "bounceLow":        bounceLow,
-            "bounceHigh":       bounceHigh,
-            "ma25Prev":         ma25Prev,
-            "ma99Prev":         ma99Prev,
-            "ma99":             list(ma99) if ma99 is not None else None,
-            "filter1Passed":    filter1,
-            "filter2Passed":    filter2,
-            "filter3Passed":    filter3,
-            # "bouncePct":        bouncePct,
-            # "maxBounceAllowed": maxBounceAllowed
-            "minPctBounceAllowed": minPctBounceAllowed,
-            "maxPctBounceAllowed": maxPctBounceAllowed
-        }
+                "type": opp['type'],
+                "slope": opp['slope'],
+                "intercept": opp['intercept'],
+                "touchesCount": opp['touchCount'],
+                "score": score,
+                "distancePct": distancePct,
+                "volumeRatio": volumeRatio,
+                "momentum": momentum,
+                "entryPrice": closeLast,
+                "bases": opp['bases'],
+                "csvPath": fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else ""
+            })
+        return results
 
     with ThreadPoolExecutor(max_workers=gvars.threadPoolMaxWorkers) as executor:
         futures = {executor.submit(processPair, p): p for p in pairs}
