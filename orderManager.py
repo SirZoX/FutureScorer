@@ -328,7 +328,7 @@ class OrderManager:
         # 1) Refresh and reconcile open positions
         self.updatePositions()
         if symbol in self.positions:
-            messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
+            #messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
             return None
 
         # 1.2) Skip if we've hit the maxOpen limit
@@ -471,6 +471,7 @@ class OrderManager:
             'slPercent': float(slPct) * 100
         }
         self.positions[symbol] = record
+        self.savePositions()
         # Enviar plot por Telegram tras abrir posición
         try:
             import glob
