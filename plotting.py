@@ -98,18 +98,21 @@ def savePlot(item):
     # Mark X only if previous candle touches support and last candle is green
     bounceIdx = None
     tolerancePct = item.get('tolerancePct', 0.015)
+    import os
     if n >= 2:
         lowPrev = df['low'].iat[n-2]
         expPrev = supportLine[n-2]
         closeLast = df['close'].iat[n-1]
-        # Generate filename for plot
-        basePair = item['pair'].split('/')[0] if '/' in item['pair'] else item['pair']
-        basePair = basePair.replace(':', '')
+        # Normalizar nombre del par eliminando sufijos y barras
+        basePair = item['pair']
+        # Eliminar sufijos como :USDT y cualquier barra
+        basePair = basePair.split('/')[0].split(':')[0].replace('-', '_').replace(' ', '_')
         if item.get('type', '') == 'discard' or basePair.startswith('DISCARD_'):
-            plotPath = gvars.plotsFolder + f"/DISCARD_{basePair}.png"
+            plotFile = f"DISCARD_{basePair}.png"
         else:
             prefix = 'LONG_' if item.get('type', 'long') == 'long' else 'SHORT_'
-            plotPath = gvars.plotsFolder + f"/{prefix}{basePair}.png"
+            plotFile = f"{prefix}{basePair}.png"
+        plotPath = os.path.join(gvars.plotsFolder, plotFile)
     # Mark bounce point with red 'X'
     if bounceIdx is not None:
         xPoint = df['timestampNum'].iat[bounceIdx]
