@@ -100,7 +100,7 @@ def savePlot(item):
     if tp is not None:
         ax.hlines(tp, *lineTimeRange, linestyle='--', color='green', linewidth=1, label='Take Profit')
     if sl is not None:
-        ax.hlines(sl, *lineTimeRange, linestyle='--', color='red', linewidth=1, label='Stop Loss')
+        ax.hlines(sl, *lineTimeRange, linestyle='--', color='red', linewidth=1, label='Stop Loss') 
 
     # Determine legend location
     yMin, yMax     = ax.get_ylim()
