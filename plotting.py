@@ -192,7 +192,6 @@ def savePlot(item):
     # Save and close
     try:
         fig.savefig(plotPath)
-        messages(f"Plot saved: {plotPath}", console=0, log=1, telegram=0, pair=item.get('pair'))
     except Exception as e:
         messages(f"Error saving plot image: {e}", console=1, log=1, telegram=0, pair=item.get('pair'))
         raise
