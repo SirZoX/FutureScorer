@@ -116,7 +116,13 @@ def syncOpenedPositions():
                 toRemove.append(symbol)
             time.sleep(0.5)
         except Exception as e:
-            messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
+            error_msg = str(e).lower()
+            # Si el símbolo no existe en el exchange, eliminarlo automáticamente
+            if "does not have market symbol" in error_msg or "symbol not found" in error_msg or "invalid symbol" in error_msg:
+                messages(f"[SYNC] Símbolo {symbol} no existe en el exchange, eliminando automáticamente", console=1, log=1, telegram=0)
+                toRemove.append(symbol)
+            else:
+                messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
             continue
     if toRemove:
         for symbol in toRemove:
