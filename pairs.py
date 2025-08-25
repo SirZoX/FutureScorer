@@ -317,7 +317,13 @@ def analyzePairs():
 
     # 3) Sort by score descending
     ordered = sorted(opportunities, key=lambda o: o["score"], reverse=True)
-    messages(f"Ordered (pair,score): {[ (o['pair'], round(float(o['score']), 4)) for o in ordered ]}", 0, 1, 0)
+    # Filtrar solo la mejor oportunidad por cada par
+    bestByPair = {}
+    for o in ordered:
+        if o['pair'] not in bestByPair:
+            bestByPair[o['pair']] = o
+    bestOrdered = list(bestByPair.values())
+    messages(f"Ordered (pair,score): {[ (o['pair'], round(float(o['score']), 4)) for o in bestOrdered ]}", 0, 1, 0)
 
     # 4) Pre-calculate bounce bounds & MA25 (si lo necesitas, pero ya lo haces en processPair)
     #    (puedes omitir este paso si confías en los valores ya retornados)
