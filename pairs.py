@@ -416,12 +416,16 @@ def analyzePairs():
 
         # Attempt to open position according to filters
         rejected = False
+        totalValidations = 8  # Total number of validation steps
+        currentValidation = 1
+        
         if opp["score"] < scoreThreshold:
-            messages(f"  ⚠️  {opp['pair']} rejected by SCORE: {opp['score']:.4f} < threshold {scoreThreshold:.4f}", console=0, log=1, telegram=0, pair=opp['pair'])
+            messages(f"  ⚠️  {opp['pair']} rejected by SCORE ({currentValidation}/{totalValidations}): {opp['score']:.4f} < threshold {scoreThreshold:.4f}", console=0, log=1, telegram=0, pair=opp['pair'])
             rejected = True
         elif posicionesYaAbiertas + nuevasAbiertas >= configData["maxOpenPositions"]:
+            currentValidation = 2
             totalOpen = posicionesYaAbiertas + nuevasAbiertas
-            messages(f"  ⚠️  {opp['pair']} rejected by OPENED POSITIONS: {totalOpen}/{configData['maxOpenPositions']}", console=0, log=1, telegram=0, pair=opp['pair'])
+            messages(f"  ⚠️  {opp['pair']} rejected by OPENED POSITIONS ({currentValidation}/{totalValidations}): {totalOpen}/{configData['maxOpenPositions']}", console=0, log=1, telegram=0, pair=opp['pair'])
             rejected = True
         else:
             try:
@@ -432,51 +436,59 @@ def analyzePairs():
                 low_n1 = df["low"].iloc[idx_n1]
                 soporte_n1 = opp["slope"] * (len(df) + idx_n1) + opp["intercept"]
                 # Only the last candle (N-1) must be green
+                currentValidation = 3
                 if not (close_n1 > open_n1):
-                    messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE: N-1 not green", console=0, log=1, telegram=0, pair=opp['pair'])
+                    messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}): N-1 not green", console=0, log=1, telegram=0, pair=opp['pair'])
                     rejected = True
                 # N-1 must touch or pierce the support line
-                if low_n1 < soporte_n1:
-                    # If it pierces, allow tolerance
-                    if abs(low_n1 - soporte_n1) > abs(soporte_n1) * tolerancePct:
-                        messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH: N-1 pierces but out of tolerance", console=0, log=1, telegram=0, pair=opp['pair'])
+                if not rejected:
+                    currentValidation = 4
+                    if low_n1 < soporte_n1:
+                        # If it pierces, allow tolerance
+                        if abs(low_n1 - soporte_n1) > abs(soporte_n1) * tolerancePct:
+                            messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 pierces but out of tolerance", console=0, log=1, telegram=0, pair=opp['pair'])
+                            rejected = True
+                    elif low_n1 > soporte_n1:
+                        # If it does not touch, do not allow tolerance
+                        messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 does not touch the support line", console=0, log=1, telegram=0, pair=opp['pair'])
                         rejected = True
-                elif low_n1 > soporte_n1:
-                    # If it does not touch, do not allow tolerance
-                    messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH: N-1 does not touch the support line", console=0, log=1, telegram=0, pair=opp['pair'])
-                    rejected = True
             except Exception as e:
-                messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE check error: {e}", console=0, log=1, telegram=0, pair=opp['pair'])
+                currentValidation = 3  # Error in candle sequence check
+                messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}) check error: {e}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
 
         # After basic filters, check entry-specific criteria for filter2
         filter2Passed = filter1Passed and not rejected
 
         if not rejected:
+            currentValidation = 5  # RANGE validation
             if not (opp["bounceLow"] <= opp["entryPrice"] <= opp["bounceHigh"]):
                 bl, bh, ep = opp["bounceLow"], opp["bounceHigh"], opp["entryPrice"]
                 if ep < bl:
                     diff_pct = 100 * (bl - ep) / bl if bl != 0 else 0
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE (BELOW): entryPrice {ep:.6f} < min {bl:.6f} ({diff_pct:.2f}% under)", console=0, log=1, telegram=0, pair=opp['pair'])
+                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}) (BELOW): entryPrice {ep:.6f} < min {bl:.6f} ({diff_pct:.2f}% under)", console=0, log=1, telegram=0, pair=opp['pair'])
                 elif ep > bh:
                     diff_pct = 100 * (ep - bh) / bh if bh != 0 else 0
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE (ABOVE): entryPrice {ep:.6f} > max {bh:.6f} ({diff_pct:.2f}% over)", console=0, log=1, telegram=0, pair=opp['pair'])
+                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}) (ABOVE): entryPrice {ep:.6f} > max {bh:.6f} ({diff_pct:.2f}% over)", console=0, log=1, telegram=0, pair=opp['pair'])
                 else:
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE: entryPrice {ep:.6f} not in [{bl:.6f}, {bh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
+                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} not in [{bl:.6f}, {bh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
                 filter2Passed = False
             elif opp.get("ma25Prev") is None or opp.get("ma99Prev") is None:
-                messages(f"  ⚠️  {opp['pair']} rejected: MA25prev or MA99prev is None", console=0, log=1, telegram=0, pair=opp['pair'])
+                currentValidation = 6  # MA validation
+                messages(f"  ⚠️  {opp['pair']} rejected ({currentValidation}/{totalValidations}): MA25prev or MA99prev is None", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
                 filter2Passed = False
             elif opp["entryPrice"] <= opp["ma25Prev"]:
+                currentValidation = 7  # MA25 validation
                 ep, mp = opp["entryPrice"], opp["ma25Prev"]
-                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA25: entryPrice {ep:.6f} <= MA25prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
+                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA25 ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} <= MA25prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
                 filter2Passed = False
             elif opp["entryPrice"] <= opp["ma99Prev"]:
+                currentValidation = 8  # MA99 validation
                 ep, mp = opp["entryPrice"], opp["ma99Prev"]
-                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA99: entryPrice {ep:.6f} <= MA99prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
+                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA99 ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} <= MA99prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
                 rejected = True
                 filter2Passed = False
         record = None
