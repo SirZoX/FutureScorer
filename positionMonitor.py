@@ -101,28 +101,21 @@ def syncOpenedPositions():
     exchange = bingxConnector()
     toRemove = []
     for symbol in list(positions.keys()):
-        normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
-        altSymbol = normSymbol + ':USDT' if not symbol.endswith(':USDT') else normSymbol
+        # Para BingX futures, usar el símbolo completo con :USDT
+        querySymbol = symbol if symbol.endswith(':USDT') else symbol + ':USDT'
         try:
             # Verifica órdenes abiertas
-            orders_norm = exchange.fetch_open_orders(normSymbol)
-            orders_alt = exchange.fetch_open_orders(altSymbol)
+            orders = exchange.fetch_open_orders(querySymbol)
             # Verifica posición activa
-            posList = exchange.fetch_positions([normSymbol])
+            posList = exchange.fetch_positions([querySymbol])
             contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
             # Si no hay órdenes abiertas y tampoco posición activa, elimina del fichero
-            if not orders_norm and not orders_alt and not contractsOpen:
+            if not orders and not contractsOpen:
                 messages(f"[SYNC] Eliminando posición cerrada: {symbol}", console=1, log=1, telegram=0)
                 toRemove.append(symbol)
             time.sleep(0.5)
         except Exception as e:
-            error_msg = str(e).lower()
-            # Si el símbolo no existe en el exchange, eliminarlo automáticamente
-            if "does not have market symbol" in error_msg or "symbol not found" in error_msg or "invalid symbol" in error_msg:
-                messages(f"[SYNC] Símbolo {symbol} no existe en el exchange, eliminando automáticamente", console=1, log=1, telegram=0)
-                toRemove.append(symbol)
-            else:
-                messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
+            messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
             continue
     if toRemove:
         for symbol in toRemove:
