@@ -654,7 +654,7 @@ def updatePairs():
     # Obtener volúmenes de todos los pares filtrados usando cache
     try:
         tickers = cachedCall("exchange_tickers", exchange.fetch_tickers, ttl=60)  # Cache for 1 minute
-        messages(f"Tickers fetched: {len(tickers)}", console=0, log=1, telegram=0)
+        messages(f"Tickers fetched: {len(tickers)}", console=0, log=1, telegram=0, pair="")
     except Exception as e:
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
@@ -680,7 +680,7 @@ def updatePairs():
     numSelect = max(1, int(len(sortedPairs) * topCoinsPctAnalyzed / 100))
     selected = sortedPairs[:numSelect]
 
-    messages(f"Total USDT perpetual futures pairs with volume >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0)
+    messages(f"Total USDT perpetual futures pairs with volume >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0, pair="")
 
     # ...existing code...
     # Justo antes de iniciar el análisis, imprimir los pares seleccionados ordenados por volumen
@@ -688,7 +688,7 @@ def updatePairs():
     # Mensaje informativo antes de analizar
     numHilos = gvars.threadPoolMaxWorkers
     sleepSeg = 0.21
-    messages(f"Using {numHilos} threads with {sleepSeg}s sleeping between each one", console=1, log=1, telegram=0)
+    messages(f"Using {numHilos} threads with {sleepSeg}s sleeping between each one", console=1, log=1, telegram=0, pair="")
 
     # Guardar selección
     fileManager.saveJson(selected, gvars.topSelectionFile.split('/')[-1])
