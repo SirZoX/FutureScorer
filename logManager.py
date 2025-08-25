@@ -76,11 +76,14 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
         messages("Telegram credentials missing; skipping Telegram send.", console=1, log=1, telegram=0)
         return
     if plotPaths:
-        print(f"[DEBUG][sendTelegramMessage] plotPaths recibidos: {plotPaths}")
         apiUrl = f"https://api.telegram.org/bot{token}/sendPhoto"
+        successful_sends = []
         for path in plotPaths:
             norm_path = path.replace('\\', '/').replace('//', '/')
-            print(f"[DEBUG][sendTelegramMessage] norm_path usado: {norm_path}")
+            # Verificar que el archivo existe antes de enviarlo
+            if not os.path.exists(norm_path):
+                messages(f"Plot file not found, skipping: {norm_path}", console=1, log=1, telegram=0)
+                continue
             try:
                 with open(norm_path, 'rb') as img:
                     files = {'photo': img}
@@ -93,10 +96,12 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
                     resp = requests.post(apiUrl, files=files, data=data)
                     if resp.status_code != 200:
                         messages(f"Error sending photo {norm_path}: {resp.text}", console=1, log=1, telegram=0)
+                    else:
+                        successful_sends.append(norm_path)
             except Exception as e:
                 messages(f"Exception sending photo {norm_path}: {e}", console=1, log=1, telegram=0)
-        print(f"[DEBUG][sendTelegramMessage] Plots enviados: {plotPaths}")
-        messages(f"Plots sent: {plotPaths}", console=0, log=1, telegram=0)
+        if successful_sends:
+            messages(f"Plots sent successfully: {len(successful_sends)} files", console=0, log=1, telegram=0)
     elif text:
         apiUrl = f"https://api.telegram.org/bot{token}/sendMessage"
         data = {
