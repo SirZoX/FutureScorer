@@ -9,10 +9,10 @@ from logManager import messages, sendPlotsByTelegram
 from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
 from plotting import savePlot
 from configManager import configManager
-from logManager import messages # log_info, log_error, log_debug, log_trade
-from validators import validate_trading_parameters, validate_symbol, sanitize_symbol
+from logManager import messages
+from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
-from cacheManager import cached_call
+from cacheManager import cachedCall
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN

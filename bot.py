@@ -36,7 +36,6 @@ from logManager import messages
 from configManager import configManager
 from logManager import messages
 from validators import validateConfigStructure
-from validators import validate_config_structure
 
 end = time.time()
 print(f"Loading modules time: {(end - start):.2f}s")
