@@ -7,6 +7,9 @@ import schedule
 from datetime import datetime
 from rich import print
 
+# Import messages early so it's available from the start
+from logManager import messages
+
 def startPositionMonitor():
     t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
     t.start()
@@ -14,7 +17,7 @@ def startPositionMonitor():
 # bot.py
 import time
 start = time.time()
-print ("\n\nLoading modules")
+messages("Loading modules", console=1, log=1, telegram=0)
 
 
 # Argument control via args.py
@@ -22,7 +25,7 @@ import args
 isSandbox = args.isSandbox or ('-test' in sys.argv)
 isForce = args.isForce
 if isSandbox:
-    print('[bold yellow1]>>> SANDBOX activated: Using VST instead USDT[/bold yellow1]')
+    messages('>>> SANDBOX activated: Using VST instead USDT', console=1, log=1, telegram=0)
 
 
 
@@ -32,13 +35,11 @@ import gvars
 import helpers
 import pairs
 
-from logManager import messages
 from configManager import configManager
-from logManager import messages
 from validators import validateConfigStructure
 
 end = time.time()
-print(f"Loading modules time: {(end - start):.2f}s")
+messages(f"Loading modules time: {(end - start):.2f}s", console=1, log=1, telegram=0)
 
 
 
