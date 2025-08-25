@@ -70,24 +70,36 @@ def savePlot(item):
     if df['ma99'].notna().sum() > 0:
         ax.plot(df['timestampNum'], df['ma99'], color='blue', linewidth=1, label='MA99')
 
-    # Plot bounce bounds (lines ahead)
+    # Plot bounce bounds (lines ahead) - only from bounce point onwards
     bl = item.get('bounceLow')
     bh = item.get('bounceHigh')
     minPctBounceAllowed = item.get('minPctBounceAllowed')
     maxPctBounceAllowed = item.get('maxPctBounceAllowed')
+    
+    # Determine the start point for horizontal lines
+    if bounceIdx is not None:
+        # Start from bounce point
+        lineStartTime = df['timestampNum'].iat[bounceIdx]
+    else:
+        # If no bounce detected, start from second to last candle
+        lineStartTime = df['timestampNum'].iat[-2] if n >= 2 else df['timestampNum'].iat[0]
+    
+    lineEndTime = df['timestampNum'].iat[-1]
+    lineTimeRange = (lineStartTime, lineEndTime)
+    
     # English comment: Use new bounce fields for plot labels
     if bl is not None and minPctBounceAllowed is not None:
-        ax.hlines(bl, *timeRange, linestyle='--', color='purple', linewidth=1, label=f'Min Bounce ({minPctBounceAllowed*100:.1f}%)')
+        ax.hlines(bl, *lineTimeRange, linestyle='--', color='purple', linewidth=1, label=f'Min Bounce ({minPctBounceAllowed*100:.1f}%)')
     if bh is not None and maxPctBounceAllowed is not None:
-        ax.hlines(bh, *timeRange, linestyle='--', color='purple', linewidth=1, label=f'Max Bounce ({maxPctBounceAllowed*100:.1f}%)')
+        ax.hlines(bh, *lineTimeRange, linestyle='--', color='purple', linewidth=1, label=f'Max Bounce ({maxPctBounceAllowed*100:.1f}%)')
 
-    # Plot TP/SL
+    # Plot TP/SL - only from bounce point onwards
     tp = item.get('tpPrice')
     sl = item.get('slPrice')
     if tp is not None:
-        ax.hlines(tp, *timeRange, linestyle='--', color='green', linewidth=1, label='Take Profit')
+        ax.hlines(tp, *lineTimeRange, linestyle='--', color='green', linewidth=1, label='Take Profit')
     if sl is not None:
-        ax.hlines(sl, *timeRange, linestyle='--', color='red', linewidth=1, label='Stop Loss')
+        ax.hlines(sl, *lineTimeRange, linestyle='--', color='red', linewidth=1, label='Stop Loss')
 
     # Determine legend location
     yMin, yMax     = ax.get_ylim()
@@ -103,6 +115,14 @@ def savePlot(item):
         lowPrev = df['low'].iat[n-2]
         expPrev = supportLine[n-2]
         closeLast = df['close'].iat[n-1]
+        openLast = df['open'].iat[n-1]
+        
+        # Check if previous candle touches support and last candle is green
+        touchesSupport = abs(lowPrev - expPrev) <= abs(expPrev) * tolerancePct
+        isGreen = closeLast > openLast
+        
+        if touchesSupport and isGreen:
+            bounceIdx = n-2  # Index of the candle that touched support
         # Normalizar nombre del par eliminando sufijos y barras
         basePair = item['pair']
         # Eliminar sufijos como :USDT, _USDT, _USDC, _BUSD, _USDT:USDT y cualquier barra
