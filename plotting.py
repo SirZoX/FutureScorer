@@ -71,6 +71,22 @@ def savePlot(item):
     if df['ma99'].notna().sum() > 0:
         ax.plot(df['timestampNum'], df['ma99'], color='blue', linewidth=1, label='MA99')
 
+    # Initialize bounceIdx and detect bounce point
+    bounceIdx = None
+    tolerancePct = item.get('tolerancePct', 0.015)
+    if n >= 2:
+        lowPrev = df['low'].iat[n-2]
+        expPrev = supportLine[n-2]
+        closeLast = df['close'].iat[n-1]
+        openLast = df['open'].iat[n-1]
+        
+        # Check if previous candle touches support and last candle is green
+        touchesSupport = abs(lowPrev - expPrev) <= abs(expPrev) * tolerancePct
+        isGreen = closeLast > openLast
+        
+        if touchesSupport and isGreen:
+            bounceIdx = n-2  # Index of the candle that touched support
+
     # Plot bounce bounds (lines ahead) - only from bounce point onwards
     bl = item.get('bounceLow')
     bh = item.get('bounceHigh')
@@ -108,21 +124,8 @@ def savePlot(item):
     topThreshold   = yMin + (yMax - yMin) * 0.66
     legendLoc      = 'lower left' if firstPrice > topThreshold else 'upper left'
 
-    # Initialize bounceIdx and detect bounce point
-    bounceIdx = None
-    tolerancePct = item.get('tolerancePct', 0.015)
+    # Generate plot file name
     if n >= 2:
-        lowPrev = df['low'].iat[n-2]
-        expPrev = supportLine[n-2]
-        closeLast = df['close'].iat[n-1]
-        openLast = df['open'].iat[n-1]
-        
-        # Check if previous candle touches support and last candle is green
-        touchesSupport = abs(lowPrev - expPrev) <= abs(expPrev) * tolerancePct
-        isGreen = closeLast > openLast
-        
-        if touchesSupport and isGreen:
-            bounceIdx = n-2  # Index of the candle that touched support
         # Normalizar nombre del par eliminando sufijos y barras
         basePair = item['pair']
         # Eliminar sufijos como :USDT, _USDT, _USDC, _BUSD, _USDT:USDT y cualquier barra
