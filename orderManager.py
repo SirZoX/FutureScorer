@@ -8,6 +8,11 @@ import time
 from logManager import messages, sendPlotsByTelegram
 from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
 from plotting import savePlot
+from config_manager import config_manager
+from logger import log_info, log_error, log_debug, log_trade
+from validators import validate_trading_parameters, validate_symbol, sanitize_symbol
+from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
+from cache_manager import cached_call
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -20,9 +25,9 @@ class OrderManager:
     def __init__(self, isSandbox=False):
         # Load config and credentials
         try:
-            with open(configFile, encoding='utf-8') as f:
-                self.config = json.load(f)
+            self.config = config_manager.config
         except Exception as e:
+            log_error("Error loading config", error=str(e))
             messages(f"Error loading config: {e}", console=1, log=1, telegram=0)
             self.config = {}
 

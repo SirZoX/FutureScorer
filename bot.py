@@ -33,7 +33,9 @@ import helpers
 import pairs
 
 from logManager import messages
-from connector import loadConfig
+from config_manager import config_manager
+from logger import log_info, log_error, log_debug
+from validators import validate_config_structure
 
 end = time.time()
 print(f"Loading modules time: {(end - start):.2f}s")
@@ -52,10 +54,15 @@ def safe_update_positions():
 
 orderManager = orderManager.OrderManager(isSandbox=isSandbox)
 
+# Validate configuration
+configData = config_manager.config
+is_valid, errors = validate_config_structure(configData)
+if not is_valid:
+    log_error("Configuration validation failed", errors=errors)
+    print(f"❌ Configuration errors: {errors}")
+    sys.exit(1)
 
-
-
-configData = loadConfig()
+log_info("Configuration validated successfully")
 
 # topPercent   = configData.get('topPercent', 10)
 # limit        = configData.get('limit', 150)
@@ -65,26 +72,26 @@ configData = loadConfig()
 # maxBounceAllowed= configData.get('maxBounceAllowed', 0.002)
 # minSeparation= configData.get('minSeparation', 36)
 # minVolume    = configData.get('minVolume', 500000)
-topCoinsPctAnalyzed = configData.get('topCoinsPctAnalyzed', 10)
-requestedCandles    = configData.get('requestedCandles', 150)
-tp1                 = configData.get('tp1', 0.01)
-sl1                 = configData.get('sl1', 0.035)
-minPctBounceAllowed = configData.get('minPctBounceAllowed', 0.002)
-maxPctBounceAllowed = configData.get('maxPctBounceAllowed', 0.002)
-minCandlesSeparationToFindSupportLine = configData.get('minCandlesSeparationToFindSupportLine', 36)
-lastCandleMinUSDVolume = configData.get('lastCandleMinUSDVolume', 500000)
-timeframe    = configData.get('timeframe', '1d')
-tolerancePct = configData.get('tolerancePct', 0.015)
-minTouches   = configData.get('minTouches', 3)
+topCoinsPctAnalyzed = config_manager.get('topCoinsPctAnalyzed', 10)
+requestedCandles    = config_manager.get('requestedCandles', 150)
+tp1                 = config_manager.get('tp1', 0.01)
+sl1                 = config_manager.get('sl1', 0.035)
+minPctBounceAllowed = config_manager.get('minPctBounceAllowed', 0.002)
+maxPctBounceAllowed = config_manager.get('maxPctBounceAllowed', 0.002)
+minCandlesSeparationToFindSupportLine = config_manager.get('minCandlesSeparationToFindSupportLine', 36)
+lastCandleMinUSDVolume = config_manager.get('lastCandleMinUSDVolume', 500000)
+timeframe    = config_manager.get('timeframe', '1d')
+tolerancePct = config_manager.get('tolerancePct', 0.015)
+minTouches   = config_manager.get('minTouches', 3)
 
 # Scoring configuration
-scoringWeights = configData.get('scoringWeights', {
+scoringWeights = config_manager.get('scoringWeights', {
     'distance': 0.3, #default value if value is not in config.json
     'volume':   0.3, #default value if value is not in config.json
     'momentum': 0.10, #default value if value is not in config.json
     'touches':  0.15 #default value if value is not in config.json
 })
-scoreThreshold = configData.get('scoreThreshold', 0.0)
+scoreThreshold = config_manager.get('scoreThreshold', 0.0)
 
 
 
@@ -252,10 +259,10 @@ if __name__ == "__main__":
     messages("-----------------------------------", console=1, log=1, telegram=0)
 
     messages("Trading & Risk", 1, 1, 0)
-    messages(f"  • maxOpenPositions = {configData.get('maxOpenPositions','')}", 1, 1, 0)
-    messages(f"  • usdcInvestment = {configData.get('usdcInvestment','')}", 1, 1, 0)
+    messages(f"  • maxOpenPositions = {config_manager.get('maxOpenPositions','')}", 1, 1, 0)
+    messages(f"  • usdcInvestment = {config_manager.get('usdcInvestment','')}", 1, 1, 0)
     messages(f"  • tp1 = {helpers.formatNum(tp1*100)}%", 1, 1, 0)
-    messages(f"  • tp2 = {helpers.formatNum(configData.get('tp2',0)*100)}%", 1, 1, 0)
+    messages(f"  • tp2 = {helpers.formatNum(config_manager.get('tp2',0)*100)}%", 1, 1, 0)
     messages(f"  • sl1 = {helpers.formatNum(sl1*100)}%", 1, 1, 0)
     messages("",1,0,0)
     
@@ -278,9 +285,9 @@ if __name__ == "__main__":
     messages("",1,0,0)
 
     messages("Scoring", 1, 1, 0)
-    weights = configData.get('scoringWeights', {})
+    weights = config_manager.get('scoringWeights', {})
     messages(f"  • scoringWeights: distance={weights.get('distance','')}, volume={weights.get('volume','')}, momentum={weights.get('momentum','')}, touches={weights.get('touches','')}", 1, 1, 0)
-    messages(f"  • scoreThreshold = {configData.get('scoreThreshold','')}", 1, 1, 0)
+    messages(f"  • scoreThreshold = {config_manager.get('scoreThreshold','')}", 1, 1, 0)
 
     messages(f"{gvars._line_}", console=1, log=1, telegram=0)
 

@@ -4,10 +4,12 @@ Cache management for FutureScorer bot.
 Implements intelligent caching to reduce API calls and improve performance.
 """
 import time
+import sys
 from typing import Any, Dict, Optional, Callable
 from dataclasses import dataclass
 from threading import Lock
 import pickle
+import os
 import os
 import gvars
 
@@ -102,6 +104,22 @@ class CacheManager:
                 pickle.dump(long_term_cache, f)
         except Exception:
             pass
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        current_time = time.time()
+        expired_count = 0
+        
+        for entry in self._cache.values():
+            if entry.is_expired():
+                expired_count += 1
+        
+        return {
+            'total_items': len(self._cache),
+            'expired_items': expired_count,
+            'active_items': len(self._cache) - expired_count,
+            'memory_usage_mb': sys.getsizeof(self._cache) / 1024 / 1024
+        }
 
 # Global cache instance
 cache_manager = CacheManager()

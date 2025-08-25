@@ -42,3 +42,8 @@ class TechnicalAnalysisError(FutureScorerError):
 class TelegramError(FutureScorerError):
     """Raised when Telegram communication fails."""
     pass
+
+# Aliases for compatibility
+ValidationError = DataValidationError
+TradingError = OrderExecutionError
+APIError = ExchangeConnectionError

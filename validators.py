@@ -17,6 +17,9 @@ def validate_symbol(symbol: str) -> bool:
     pattern = r'^[A-Z0-9]+[/:-][A-Z0-9]+(?::[A-Z0-9]+)?$'
     return bool(re.match(pattern, symbol.upper()))
 
+# Alias for compatibility
+validate_pair_format = validate_symbol
+
 def validate_timeframe(timeframe: str) -> bool:
     """Validate timeframe format (e.g., 1m, 5m, 1h, 1d)."""
     if not timeframe or not isinstance(timeframe, str):
@@ -181,3 +184,20 @@ def sanitize_filename(filename: str) -> str:
         raise DataValidationError("Filename becomes empty after sanitization")
     
     return filename
+
+def validate_position_data(position: Dict[str, Any]) -> bool:
+    """Validate position data structure."""
+    required_fields = ['symbol', 'amount', 'price', 'side']
+    
+    for field in required_fields:
+        if field not in position:
+            return False
+        
+        if field == 'symbol' and not validate_symbol(position[field]):
+            return False
+        elif field in ['amount', 'price'] and not validate_positive_number(position[field]):
+            return False
+        elif field == 'side' and position[field] not in ['buy', 'sell']:
+            return False
+    
+    return True

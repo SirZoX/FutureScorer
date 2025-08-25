@@ -68,6 +68,18 @@ class ConfigManager:
         if self._config is None:
             self.reload_config()
         return self._config.copy()
+    
+    def get_credentials(self) -> Dict[str, str]:
+        """Get trading credentials."""
+        return {
+            'apikey': self.config.get('apikey', ''),
+            'apisecret': self.config.get('apisecret', ''),
+            'sandbox': self.config.get('sandbox', False)
+        }
+    
+    def is_sandbox(self) -> bool:
+        """Check if running in sandbox mode."""
+        return self.config.get('sandbox', False)
 
 # Global instance for easy access
 config_manager = ConfigManager()

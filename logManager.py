@@ -6,21 +6,21 @@ import inspect
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from gvars import configFile, logsFolder
-from connector import loadConfig
+from config_manager import config_manager
+from logger import log_info, log_error
+from exceptions import ConfigurationError
 
 # ——— Configuración de Telegram ———
-
-
-
-# with open(configFile, encoding='utf-8') as f:
-#     _cfg = json.load(f)
-# _telegramToken = _cfg.get('telegramTextToken')
-# _telegramChatId = _cfg.get('telegramChatId')
-# _telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)
-_cfg = loadConfig()
-_telegramToken = _cfg.get('telegramToken')
-_telegramChatId = _cfg.get('telegramChatId')
-_telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)
+try:
+    _cfg = config_manager.config
+    _telegramToken = _cfg.get('telegramToken')
+    _telegramChatId = _cfg.get('telegramChatId')
+    _telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)
+except Exception as e:
+    log_error("Error loading config", error=str(e))
+    _telegramToken = None
+    _telegramChatId = None
+    _telegramPlotsToken = None
 
 
 
