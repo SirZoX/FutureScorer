@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
 from datetime import datetime
+import os
 import gvars
 from logManager import messages # log_info, log_error
 
@@ -107,10 +108,9 @@ def savePlot(item):
     topThreshold   = yMin + (yMax - yMin) * 0.66
     legendLoc      = 'lower left' if firstPrice > topThreshold else 'upper left'
 
-    # Mark X only if previous candle touches support and last candle is green
+    # Initialize bounceIdx and detect bounce point
     bounceIdx = None
     tolerancePct = item.get('tolerancePct', 0.015)
-    import os
     if n >= 2:
         lowPrev = df['low'].iat[n-2]
         expPrev = supportLine[n-2]
