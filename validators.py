@@ -8,7 +8,7 @@ import re
 from decimal import Decimal, InvalidOperation
 from exceptions import DataValidationError, ConfigurationError
 
-def validate_symbol(symbol: str) -> bool:
+def validateSymbol(symbol: str) -> bool:
     """Validate trading symbol format."""
     if not symbol or not isinstance(symbol, str):
         return False
@@ -18,9 +18,9 @@ def validate_symbol(symbol: str) -> bool:
     return bool(re.match(pattern, symbol.upper()))
 
 # Alias for compatibility
-validate_pair_format = validate_symbol
+validatePairFormat = validateSymbol
 
-def validate_timeframe(timeframe: str) -> bool:
+def validateTimeframe(timeframe: str) -> bool:
     """Validate timeframe format (e.g., 1m, 5m, 1h, 1d)."""
     if not timeframe or not isinstance(timeframe, str):
         return False
@@ -28,7 +28,7 @@ def validate_timeframe(timeframe: str) -> bool:
     pattern = r'^\d+[mhd]$'
     return bool(re.match(pattern, timeframe.lower()))
 
-def validate_price(price: Union[str, int, float, Decimal]) -> bool:
+def validatePrice(price: Union[str, int, float, Decimal]) -> bool:
     """Validate price value."""
     try:
         price_decimal = Decimal(str(price))
@@ -36,15 +36,15 @@ def validate_price(price: Union[str, int, float, Decimal]) -> bool:
     except (InvalidOperation, ValueError, TypeError):
         return False
 
-def validate_percentage(value: Union[str, int, float], min_val: float = 0, max_val: float = 100) -> bool:
+def validatePercentage(value: Union[str, int, float], minVal: float = 0, maxVal: float = 100) -> bool:
     """Validate percentage value within range."""
     try:
         num_val = float(value)
-        return min_val <= num_val <= max_val
+        return minVal <= num_val <= maxVal
     except (ValueError, TypeError):
         return False
 
-def validate_positive_number(value: Union[str, int, float]) -> bool:
+def validatePositiveNumber(value: Union[str, int, float]) -> bool:
     """Validate positive number."""
     try:
         num_val = float(value)
@@ -52,11 +52,11 @@ def validate_positive_number(value: Union[str, int, float]) -> bool:
     except (ValueError, TypeError):
         return False
 
-def validate_config_structure(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+def validateConfigStructure(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """Validate configuration structure and required fields."""
     errors = []
     required_fields = [
-        'apikey', 'apisecret', 'telegramToken', 'telegramChatId',
+        'apiKey', 'apiSecret', 'telegramToken', 'telegramChatId',
         'maxOpenPositions', 'usdcInvestment', 'timeframe'
     ]
     
@@ -72,11 +72,11 @@ def validate_config_structure(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
             errors.append("maxOpenPositions must be a positive integer")
     
     if 'usdcInvestment' in config:
-        if not validate_positive_number(config['usdcInvestment']):
+        if not validatePositiveNumber(config['usdcInvestment']):
             errors.append("usdcInvestment must be a positive number")
     
     if 'timeframe' in config:
-        if not validate_timeframe(config['timeframe']):
+        if not validateTimeframe(config['timeframe']):
             errors.append("Invalid timeframe format")
     
     # Validate scoring weights
@@ -92,7 +92,7 @@ def validate_config_structure(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
     
     return len(errors) == 0, errors
 
-def validate_ohlcv_data(data: List[List]) -> bool:
+def validateOhlcvData(data: List[List]) -> bool:
     """Validate OHLCV data structure."""
     if not data or not isinstance(data, list):
         return False
@@ -127,7 +127,7 @@ def validate_ohlcv_data(data: List[List]) -> bool:
     
     return True
 
-def validate_trading_parameters(
+def validateTradingParameters(
     symbol: str,
     amount: Union[str, int, float],
     price: Optional[Union[str, int, float]] = None,
@@ -136,13 +136,13 @@ def validate_trading_parameters(
     """Validate trading parameters."""
     errors = []
     
-    if not validate_symbol(symbol):
+    if not validateSymbol(symbol):
         errors.append(f"Invalid symbol format: {symbol}")
     
-    if not validate_positive_number(amount):
+    if not validatePositiveNumber(amount):
         errors.append(f"Invalid amount: {amount}")
     
-    if price is not None and not validate_price(price):
+    if price is not None and not validatePrice(price):
         errors.append(f"Invalid price: {price}")
     
     valid_order_types = ['market', 'limit', 'stop', 'stop_market', 'take_profit_market']
@@ -151,7 +151,7 @@ def validate_trading_parameters(
     
     return len(errors) == 0, errors
 
-def sanitize_symbol(symbol: str) -> str:
+def sanitizeSymbol(symbol: str) -> str:
     """Sanitize and normalize symbol format."""
     if not symbol:
         raise DataValidationError("Symbol cannot be empty")
@@ -162,12 +162,12 @@ def sanitize_symbol(symbol: str) -> str:
     # Normalize separators
     symbol = symbol.replace('-', '/').replace('_', '/')
     
-    if not validate_symbol(symbol):
+    if not validateSymbol(symbol):
         raise DataValidationError(f"Invalid symbol format: {symbol}")
     
     return symbol
 
-def sanitize_filename(filename: str) -> str:
+def sanitizeFilename(filename: str) -> str:
     """Sanitize filename for safe file operations."""
     if not filename:
         raise DataValidationError("Filename cannot be empty")
@@ -185,7 +185,7 @@ def sanitize_filename(filename: str) -> str:
     
     return filename
 
-def validate_position_data(position: Dict[str, Any]) -> bool:
+def validatePositionData(position: Dict[str, Any]) -> bool:
     """Validate position data structure."""
     required_fields = ['symbol', 'amount', 'price', 'side']
     
@@ -193,9 +193,9 @@ def validate_position_data(position: Dict[str, Any]) -> bool:
         if field not in position:
             return False
         
-        if field == 'symbol' and not validate_symbol(position[field]):
+        if field == 'symbol' and not validateSymbol(position[field]):
             return False
-        elif field in ['amount', 'price'] and not validate_positive_number(position[field]):
+        elif field in ['amount', 'price'] and not validatePositiveNumber(position[field]):
             return False
         elif field == 'side' and position[field] not in ['buy', 'sell']:
             return False

@@ -8,11 +8,11 @@ import time
 from logManager import messages, sendPlotsByTelegram
 from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
 from plotting import savePlot
-from config_manager import config_manager
-from logger import log_info, log_error, log_debug, log_trade
+from configManager import configManager
+from logManager import messages # log_info, log_error, log_debug, log_trade
 from validators import validate_trading_parameters, validate_symbol, sanitize_symbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
-from cache_manager import cached_call
+from cacheManager import cached_call
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -25,9 +25,8 @@ class OrderManager:
     def __init__(self, isSandbox=False):
         # Load config and credentials
         try:
-            self.config = config_manager.config
+            self.config = configManager.config
         except Exception as e:
-            log_error("Error loading config", error=str(e))
             messages(f"Error loading config: {e}", console=1, log=1, telegram=0)
             self.config = {}
 
@@ -158,7 +157,7 @@ class OrderManager:
         return record
     
 
-    def _annotate_selection_log(self, orderIdentifier: str, profitQuote: float, profitPct: float, tsOpenIso: str):
+    def annotateSelectionLog(self, orderIdentifier: str, profitQuote: float, profitPct: float, tsOpenIso: str):
         """
         Busca la línea con coincidencia exacta de id y actualiza los campos de cierre.
         Si no la encuentra, lo loguea. Solo reescribe si se actualizó.
@@ -296,7 +295,7 @@ class OrderManager:
                 # Comentar el uso antiguo y dejar nota
                 # recordId = f"{tpOrderId or ''}-{slOrderId or ''}"
                 recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
-                self._annotate_selection_log(recordId, profitQuote, profitPct, tsOpenIso)
+                self.annotateSelectionLog(recordId, profitQuote, profitPct, tsOpenIso)
                 position['notified'] = True
                 # Marcar para eliminar del dict
                 symbols_to_remove.append(symbol)

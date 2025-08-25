@@ -33,8 +33,9 @@ import helpers
 import pairs
 
 from logManager import messages
-from config_manager import config_manager
-from logger import log_info, log_error, log_debug
+from configManager import configManager
+from logManager import messages
+from validators import validateConfigStructure
 from validators import validate_config_structure
 
 end = time.time()
@@ -44,7 +45,7 @@ print(f"Loading modules time: {(end - start):.2f}s")
 
 
 update_lock = threading.Lock()
-def safe_update_positions():
+def safeUpdatePositions():
     if update_lock.locked():
         messages("Skipping updatePositions: still running previous invocation", console=1, log=1, telegram=0)
         return
@@ -55,14 +56,14 @@ def safe_update_positions():
 orderManager = orderManager.OrderManager(isSandbox=isSandbox)
 
 # Validate configuration
-configData = config_manager.config
-is_valid, errors = validate_config_structure(configData)
-if not is_valid:
-    log_error("Configuration validation failed", errors=errors)
+configData = configManager.config
+isValid, errors = validateConfigStructure(configData)
+if not isValid:
+    messages(f"Configuration validation failed | errors={errors}", console=1, log=1, telegram=0)
     print(f"❌ Configuration errors: {errors}")
     sys.exit(1)
 
-log_info("Configuration validated successfully")
+messages("Configuration validated successfully", console=1, log=1, telegram=0)
 
 # topPercent   = configData.get('topPercent', 10)
 # limit        = configData.get('limit', 150)
@@ -72,26 +73,26 @@ log_info("Configuration validated successfully")
 # maxBounceAllowed= configData.get('maxBounceAllowed', 0.002)
 # minSeparation= configData.get('minSeparation', 36)
 # minVolume    = configData.get('minVolume', 500000)
-topCoinsPctAnalyzed = config_manager.get('topCoinsPctAnalyzed', 10)
-requestedCandles    = config_manager.get('requestedCandles', 150)
-tp1                 = config_manager.get('tp1', 0.01)
-sl1                 = config_manager.get('sl1', 0.035)
-minPctBounceAllowed = config_manager.get('minPctBounceAllowed', 0.002)
-maxPctBounceAllowed = config_manager.get('maxPctBounceAllowed', 0.002)
-minCandlesSeparationToFindSupportLine = config_manager.get('minCandlesSeparationToFindSupportLine', 36)
-lastCandleMinUSDVolume = config_manager.get('lastCandleMinUSDVolume', 500000)
-timeframe    = config_manager.get('timeframe', '1d')
-tolerancePct = config_manager.get('tolerancePct', 0.015)
-minTouches   = config_manager.get('minTouches', 3)
+topCoinsPctAnalyzed = configManager.get('topCoinsPctAnalyzed', 10)
+requestedCandles    = configManager.get('requestedCandles', 150)
+tp1                 = configManager.get('tp1', 0.01)
+sl1                 = configManager.get('sl1', 0.035)
+minPctBounceAllowed = configManager.get('minPctBounceAllowed', 0.002)
+maxPctBounceAllowed = configManager.get('maxPctBounceAllowed', 0.002)
+minCandlesSeparationToFindSupportLine = configManager.get('minCandlesSeparationToFindSupportLine', 36)
+lastCandleMinUSDVolume = configManager.get('lastCandleMinUSDVolume', 500000)
+timeframe    = configManager.get('timeframe', '1d')
+tolerancePct = configManager.get('tolerancePct', 0.015)
+minTouches   = configManager.get('minTouches', 3)
 
 # Scoring configuration
-scoringWeights = config_manager.get('scoringWeights', {
+scoringWeights = configManager.get('scoringWeights', {
     'distance': 0.3, #default value if value is not in config.json
     'volume':   0.3, #default value if value is not in config.json
     'momentum': 0.10, #default value if value is not in config.json
     'touches':  0.15 #default value if value is not in config.json
 })
-scoreThreshold = config_manager.get('scoreThreshold', 0.0)
+scoreThreshold = configManager.get('scoreThreshold', 0.0)
 
 
 
@@ -259,10 +260,10 @@ if __name__ == "__main__":
     messages("-----------------------------------", console=1, log=1, telegram=0)
 
     messages("Trading & Risk", 1, 1, 0)
-    messages(f"  • maxOpenPositions = {config_manager.get('maxOpenPositions','')}", 1, 1, 0)
-    messages(f"  • usdcInvestment = {config_manager.get('usdcInvestment','')}", 1, 1, 0)
+    messages(f"  • maxOpenPositions = {configManager.get('maxOpenPositions','')}", 1, 1, 0)
+    messages(f"  • usdcInvestment = {configManager.get('usdcInvestment','')}", 1, 1, 0)
     messages(f"  • tp1 = {helpers.formatNum(tp1*100)}%", 1, 1, 0)
-    messages(f"  • tp2 = {helpers.formatNum(config_manager.get('tp2',0)*100)}%", 1, 1, 0)
+    messages(f"  • tp2 = {helpers.formatNum(configManager.get('tp2',0)*100)}%", 1, 1, 0)
     messages(f"  • sl1 = {helpers.formatNum(sl1*100)}%", 1, 1, 0)
     messages("",1,0,0)
     
@@ -285,9 +286,9 @@ if __name__ == "__main__":
     messages("",1,0,0)
 
     messages("Scoring", 1, 1, 0)
-    weights = config_manager.get('scoringWeights', {})
+    weights = configManager.get('scoringWeights', {})
     messages(f"  • scoringWeights: distance={weights.get('distance','')}, volume={weights.get('volume','')}, momentum={weights.get('momentum','')}, touches={weights.get('touches','')}", 1, 1, 0)
-    messages(f"  • scoreThreshold = {config_manager.get('scoreThreshold','')}", 1, 1, 0)
+    messages(f"  • scoreThreshold = {configManager.get('scoreThreshold','')}", 1, 1, 0)
 
     messages(f"{gvars._line_}", console=1, log=1, telegram=0)
 
@@ -314,7 +315,7 @@ if __name__ == "__main__":
         startPositionMonitor()
 
     setupSchedules(timeframe)
-    schedule.every(3).minutes.do(safe_update_positions)
+    schedule.every(3).minutes.do(safeUpdatePositions)
     schedule.every().day.at("00:00").do(orderManager.updateDailyBalance)
     schedule.every(10).seconds.do(helpers.checkTelegram)
 

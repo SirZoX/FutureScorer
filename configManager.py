@@ -1,4 +1,4 @@
-# config_manager.py
+# configManager.py
 """
 Centralized configuration management for FutureScorer bot.
 Singleton pattern to ensure consistent config across modules.
@@ -72,8 +72,8 @@ class ConfigManager:
     def get_credentials(self) -> Dict[str, str]:
         """Get trading credentials."""
         return {
-            'apikey': self.config.get('apikey', ''),
-            'apisecret': self.config.get('apisecret', ''),
+            'apikey': self.config.get('apiKey', ''),
+            'apisecret': self.config.get('apiSecret', ''),
             'sandbox': self.config.get('sandbox', False)
         }
     
@@ -82,13 +82,13 @@ class ConfigManager:
         return self.config.get('sandbox', False)
 
 # Global instance for easy access
-config_manager = ConfigManager()
+configManager = ConfigManager()
 
 # Convenience functions for backward compatibility
 def loadConfig() -> Dict[str, Any]:
     """Legacy function for backward compatibility."""
-    return config_manager.config
+    return configManager.config
 
 def getConfig(key: str, default: Any = None) -> Any:
     """Get config value with default."""
-    return config_manager.get(key, default)
+    return configManager.get(key, default)

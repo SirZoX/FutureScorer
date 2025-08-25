@@ -4,11 +4,11 @@ import json
 import time
 import ccxt
 from connector import bingxConnector
-from config_manager import config_manager
-from validators import validate_symbol, validate_ohlcv_data, sanitize_symbol
-from logger import log_info, log_error, log_debug, log_trade
+from configManager import configManager
+from validators import validateSymbol, validateOhlcvData, sanitizeSymbol
+from logManager import messages
 from exceptions import DataValidationError, ExchangeConnectionError
-from cache_manager import cached_call, cache_manager
+from cacheManager import cachedCall, cacheManager
 import pandas as pd
 
 
@@ -84,7 +84,7 @@ def getFuturesPairs():
 
 
 
-def filter_signals(df):
+def filterSignals(df):
     """
     1) Elimina los outliers extremos de 'low' (percentil 1–99)
     2) (Opcional) aquí podrías añadir más filtros globales
@@ -122,7 +122,7 @@ def analyzePairs():
     dateTag = datetime.utcnow().date().isoformat()
 
     # Leer config en caliente
-    configData = config_manager.config
+    configData = configManager.config
 
     # Core parameters
     # topPercent   = configData.get('topPercent', 10)
@@ -203,7 +203,7 @@ def analyzePairs():
             if diffSeconds < tfSeconds:
                 df = df.iloc[:-1]
 
-        df = filter_signals(df)
+        df = filterSignals(df)
         # Detectar oportunidades long y short
         opps = findPossibleResistancesAndSupports(
             df["low"].values,
@@ -635,7 +635,7 @@ def updatePairs():
         ignorePairs = []
 
     # Leer config en caliente para topCoinsPctAnalyzed
-    topCoinsPctAnalyzed = config_manager.get('topCoinsPctAnalyzed', 10)
+    topCoinsPctAnalyzed = configManager.get('topCoinsPctAnalyzed', 10)
 
     # Selección de pares de futuros perpetuos USDT
     futuresPairs = getFuturesPairs()
@@ -643,27 +643,27 @@ def updatePairs():
     validated_pairs = []
     for symbol in futuresPairs:
         try:
-            if validate_symbol(symbol) and symbol not in ignorePairs:
+            if validateSymbol(symbol) and symbol not in ignorePairs:
                 validated_pairs.append(symbol)
         except DataValidationError:
-            log_error("Invalid symbol detected", symbol=symbol)
+            messages(f"Invalid symbol detected: {symbol}", console=1, log=1, telegram=0)
     
     filtered = validated_pairs
     total = len(filtered)
 
     # Obtener volúmenes de todos los pares filtrados usando cache
     try:
-        tickers = cached_call("exchange_tickers", exchange.fetch_tickers, ttl=60)  # Cache for 1 minute
-        log_debug("Tickers fetched", count=len(tickers))
+        tickers = cachedCall("exchange_tickers", exchange.fetch_tickers, ttl=60)  # Cache for 1 minute
+        messages(f"Tickers fetched: {len(tickers)}", console=0, log=1, telegram=0)
     except Exception as e:
-        log_error("Error fetching tickers", error=str(e))
+        messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
         tickers = {}
 
 
 
     # Leer volumen mínimo de config
-    minVolume = config_manager.get('last24hrsPairVolume', 0)
+    minVolume = configManager.get('last24hrsPairVolume', 0)
 
     # Calcular volumen en USDT para cada par y filtrar por mínimo
     volumes_usdt = {}

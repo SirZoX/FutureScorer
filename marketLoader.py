@@ -5,13 +5,13 @@ import ccxt
 from connector import bingxConnector
 import time
 from gvars import configFile, configFolder, marketsFile
-from config_manager import config_manager
-from logger import log_info
+from configManager import configManager
+from logManager import messages # log_info
 
-config = config_manager.config
+config = configManager.config
 exchange = bingxConnector()
 
-log_info("Loading markets")
+messages("Loading markets", console=1, log=1, telegram=0)
 start = time.time()
 
 markets = exchange.load_markets(True)
@@ -21,4 +21,4 @@ with open(marketsFile, "w", encoding="utf-8") as f:
     json.dump(markets, f, default=str, indent=2)
 
 end = time.time()
-log_info(f"Loading markets time: {(end - start):.2f}s")
+messages(f"Loading markets time: {(end - start):.2f}s", console=1, log=1, telegram=0)

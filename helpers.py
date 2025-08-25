@@ -3,8 +3,8 @@ import requests
 import json
 import gvars
 from logManager import messages
-from config_manager import config_manager
-from logger import log_error, log_debug
+from configManager import configManager
+from logManager import messages # log_error, log_debug
 
 
 
@@ -21,8 +21,8 @@ def checkTelegram():
     '''
     global update_offset
     
-    token   = config_manager.get('telegramToken')
-    chat_id = config_manager.get('telegramChatId')
+    token   = configManager.get('telegramToken')
+    chat_id = configManager.get('telegramChatId')
     url     = f"https://api.telegram.org/bot{token}/getUpdates"
     params  = {'timeout': 0}
     if update_offset is not None:
@@ -40,7 +40,7 @@ def checkTelegram():
             if str(msg.get('chat', {}).get('id')) == str(chat_id) and text == 'ping':
                 messages("pong!", console=0, log=0, telegram=1)
     except Exception as e:
-        log_error("Error at checkTelegram", error=str(e))
+        messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
         messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
     
 

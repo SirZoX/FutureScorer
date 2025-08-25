@@ -8,7 +8,7 @@ import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
 from datetime import datetime
 import gvars
-from logger import log_info, log_error
+from logManager import messages # log_info, log_error
 
 
 def savePlot(item):
@@ -21,7 +21,7 @@ def savePlot(item):
     try:
         df = pd.read_csv(item['csvPath'], parse_dates=['timestamp'])
     except Exception as e:
-        log_error("Error loading CSV for plot", error=str(e), pair=item.get('pair'))
+        messages(f"Error loading CSV for plot: {e}", console=1, log=1, telegram=0, pair=item.get('pair'))
         raise
     # Convert all timestamps to Europe/Madrid timezone
     from zoneinfo import ZoneInfo
@@ -192,9 +192,9 @@ def savePlot(item):
     # Save and close
     try:
         fig.savefig(plotPath)
-        log_info(f"Plot saved: {plotPath}", pair=item.get('pair'))
+        messages(f"Plot saved: {plotPath}", console=0, log=1, telegram=0, pair=item.get('pair'))
     except Exception as e:
-        log_error("Error saving plot image", error=str(e), pair=item.get('pair'))
+        messages(f"Error saving plot image: {e}", console=1, log=1, telegram=0, pair=item.get('pair'))
         raise
     finally:
         plt.close(fig)

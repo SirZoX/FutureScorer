@@ -3,7 +3,7 @@ import ccxt
 from connector import bingxConnector
 
 
-def fetch_market_info():
+def fetchMarketInfo():
     # Load API credentials from config.json
     with open('_files/config/config.json', 'r') as cfg:
         config = json.load(cfg)
@@ -28,4 +28,4 @@ def fetch_market_info():
 
 
 if __name__ == '__main__':
-    fetch_market_info()
+    fetchMarketInfo()

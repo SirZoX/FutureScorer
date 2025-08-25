@@ -6,7 +6,7 @@ import pandas as pd
 from zoneinfo import ZoneInfo
 from datetime import datetime
 import gvars
-from logger import log_info, log_error
+from logManager import messages # log_info, log_error
 
 
 
@@ -19,9 +19,9 @@ def clearLogFile(log_path):
     try:
         with open(log_path, 'w', encoding='utf-8') as f:
             pass
-        log_info(f"Log file '{log_path}' cleared.")
+        messages(f"Log file '{log_path}' cleared.", console=0, log=1, telegram=0)
     except Exception as e:
-        log_error(f"Could not clear log file '{log_path}'", error=str(e))
+        messages(f"Could not clear log file '{log_path}': {e}", console=1, log=1, telegram=0)
 
 
 

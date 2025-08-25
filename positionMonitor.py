@@ -7,21 +7,21 @@ def manageDynamicTpSl():
     """
     import ccxt
     from connector import bingxConnector
-    from config_manager import config_manager
-    from logger import log_info, log_error
+    from configManager import configManager
+    from logManager import messages # log_info, log_error
     from logManager import messages  # Para mantener compatibilidad temporal
     from gvars import positionsFile, configFile
     try:
         with open(positionsFile, encoding='utf-8') as f:
             positions = json.load(f)
     except Exception as e:
-        log_error("[DYN-TP/SL] Error loading positions", error=str(e))
+        messages(f"[DYN-TP/SL] Error loading positions: {e}", console=1, log=1, telegram=1)
         messages(f"[DYN-TP/SL] Error loading positions: {e}", console=1, log=1, telegram=1)
         return
     try:
-        config = config_manager.config
+        config = configManager.config
     except Exception as e:
-        log_error("[DYN-TP/SL] Error loading config", error=str(e))
+        messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         return
     exchange = bingxConnector()
@@ -90,7 +90,7 @@ def syncOpenedPositions():
     from connector import bingxConnector
     from gvars import positionsFile
     from logManager import messages
-    from logger import log_info, log_error
+    from logManager import messages # log_info, log_error
     import time
     try:
         with open(positionsFile, encoding='utf-8') as f:

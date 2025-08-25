@@ -6,18 +6,36 @@ import inspect
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from gvars import configFile, logsFolder
-from config_manager import config_manager
-from logger import log_info, log_error
+from configManager import configManager
 from exceptions import ConfigurationError
+
+# Aliases for compatibility with new logger system
+def log_info(message, **kwargs):
+    messages(message, console=1, log=1, telegram=0)
+
+def log_error(message, error=None, **kwargs):
+    if error:
+        messages(f"{message}: {error}", console=1, log=1, telegram=0)
+    else:
+        messages(message, console=1, log=1, telegram=0)
+
+def log_debug(message, **kwargs):
+    messages(message, console=0, log=1, telegram=0)
+
+def log_warning(message, **kwargs):
+    messages(message, console=1, log=1, telegram=0)
+
+def log_trade(message, **kwargs):
+    messages(message, console=1, log=1, telegram=1)
 
 # ——— Configuración de Telegram ———
 try:
-    _cfg = config_manager.config
+    _cfg = configManager.config
     _telegramToken = _cfg.get('telegramToken')
     _telegramChatId = _cfg.get('telegramChatId')
     _telegramPlotsToken = _cfg.get('telegramPlotsToken', _telegramToken)
 except Exception as e:
-    log_error("Error loading config", error=str(e))
+    print(f"Error loading config: {e}")  # Use print to avoid circular reference
     _telegramToken = None
     _telegramChatId = None
     _telegramPlotsToken = None
@@ -26,7 +44,7 @@ except Exception as e:
 
 # ——— Configuración de logs CSV ———
 tz_madrid = ZoneInfo("Europe/Madrid")
-def get_log_csv_path():
+def getLogCsvPath():
     now = datetime.now(tz_madrid)
     year_month = now.strftime("%Y_%m")
     day = now.strftime("%d%m%Y")
@@ -34,7 +52,7 @@ def get_log_csv_path():
     os.makedirs(folder, exist_ok=True)
     return os.path.join(folder, f"{day}.csv")
 
-def ensure_csv_header(path):
+def ensureCsvHeader(path):
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         with open(path, 'a', encoding='utf-8-sig') as f:
             f.write("fecha,hora,funcion,par,mensaje\n")
@@ -147,8 +165,8 @@ def messages(text, console=1, log=1, telegram=0, caption=None, pair=None):
         funcion_clean = funcion.replace(',', ';')
         par_clean = str(par).replace(',', ';') if par else ""
         logline = f"{fecha},{hora},{funcion_clean},{par_clean},{msg_clean}\n"
-        log_path = get_log_csv_path()
-        ensure_csv_header(log_path)
+        log_path = getLogCsvPath()
+        ensureCsvHeader(log_path)
         with open(log_path, 'a', encoding='utf-8-sig') as f:
             f.write(logline)
     if telegram:

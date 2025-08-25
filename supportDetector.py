@@ -74,9 +74,9 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
 import json
 import numpy as np
 from gvars import configFile
-from config_manager import config_manager
+from configManager import configManager
 
-cfg = config_manager.config
+cfg = configManager.config
 tolerancePct = cfg['tolerancePct']
 # bouncePct = cfg['bouncePct']
 bouncePct = cfg['minPctBounceAllowed']
