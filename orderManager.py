@@ -242,15 +242,26 @@ class OrderManager:
                     slInfo = self.exchange.fetch_order(activeSlOrderId, symbol)
                     slStatus = str(slInfo.get('status', '')).lower()
             except Exception as e:
-                # If order doesn't exist, it was likely executed - check for trades to determine closure
                 error_msg = str(e).lower()
                 if "order not exist" in error_msg or "80016" in error_msg:
-                    messages(f"[DEBUG] Order not found for {symbol} (likely executed), checking trades", pair=symbol, console=0, log=1, telegram=0)
-                    # Set status as filled for processing
-                    if activeTpOrderId and not tpStatus:
-                        tpStatus = 'filled'
-                    if activeSlOrderId and not slStatus:
-                        slStatus = 'filled'
+                    # Order doesn't exist, but this doesn't mean position is closed
+                    # Check if position is still active before assuming closure
+                    try:
+                        querySymbol = symbol if symbol.endswith(':USDT') else symbol + ':USDT'
+                        posList = self.exchange.fetch_positions([querySymbol])
+                        contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
+                        
+                        if contractsOpen:
+                            # Position is still active, orders might have been cancelled/recreated
+                            messages(f"[DEBUG] Orders not found but position still active for {symbol}, skipping", pair=symbol, console=0, log=1, telegram=0)
+                            continue
+                        else:
+                            # Position is closed and orders don't exist, check for closure
+                            messages(f"[DEBUG] Orders not found and position closed for {symbol}, checking trades", pair=symbol, console=0, log=1, telegram=0)
+                            tpStatus = 'filled'  # Assume executed to trigger trade analysis
+                    except Exception as pos_error:
+                        messages(f"[ERROR] Could not verify position status for {symbol}: {pos_error}", pair=symbol, console=1, log=1, telegram=0)
+                        continue
                 else:
                     messages(f"[ERROR] fetch_order failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
                     continue
