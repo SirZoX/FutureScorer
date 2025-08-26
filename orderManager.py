@@ -78,6 +78,7 @@ class OrderManager:
     def fetchOrderWithRetry(self, orderId, symbol, maxRetries=3, delay=2):
         """
         Fetch order with retry logic for rate limiting errors (100410)
+        Returns None if max retries reached for rate limit errors
         """
         for attempt in range(maxRetries):
             try:
@@ -91,8 +92,8 @@ class OrderManager:
                         delay *= 1.5  # Exponential backoff
                         continue
                     else:
-                        messages(f"Max retries reached for {symbol} order {orderId}, skipping this check", pair=symbol, console=1, log=1, telegram=0)
-                        raise e
+                        messages(f"Max retries reached for {symbol} order {orderId}, will check trades instead", pair=symbol, console=0, log=1, telegram=0)
+                        return None  # Return None instead of raising exception
                 else:
                     # Not a rate limit error, re-raise immediately
                     raise e
@@ -261,10 +262,42 @@ class OrderManager:
             try:
                 if activeTpOrderId:
                     tpInfo = self.fetchOrderWithRetry(activeTpOrderId, symbol)
-                    tpStatus = str(tpInfo.get('status', '')).lower()
+                    if tpInfo is not None:
+                        tpStatus = str(tpInfo.get('status', '')).lower()
+                    else:
+                        # Rate limit reached, check trades instead
+                        messages(f"TP order status unavailable for {symbol}, checking trades", pair=symbol, console=0, log=1, telegram=0)
+                        
                 if activeSlOrderId:
                     slInfo = self.fetchOrderWithRetry(activeSlOrderId, symbol)
-                    slStatus = str(slInfo.get('status', '')).lower()
+                    if slInfo is not None:
+                        slStatus = str(slInfo.get('status', '')).lower()
+                    else:
+                        # Rate limit reached, check trades instead
+                        messages(f"SL order status unavailable for {symbol}, checking trades", pair=symbol, console=0, log=1, telegram=0)
+                
+                # If we couldn't get order status due to rate limits, check trades directly
+                if (activeTpOrderId and tpInfo is None) or (activeSlOrderId and slInfo is None):
+                    try:
+                        allTrades = self.exchange.fetch_my_trades(symbol)
+                        relevantTrades = [
+                            t for t in allTrades
+                            if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
+                        ]
+                        
+                        if relevantTrades:
+                            # Found sell trades, position is likely closed
+                            messages(f"Sell trades found for {symbol}, processing closure", pair=symbol, console=0, log=1, telegram=0)
+                            tpStatus = 'filled'  # Trigger closure processing
+                        else:
+                            # No sell trades found, position is still active
+                            messages(f"No sell trades found for {symbol}, assuming position still active", pair=symbol, console=0, log=1, telegram=0)
+                            continue
+                            
+                    except Exception as trade_error:
+                        messages(f"[ERROR] Could not fetch trades for {symbol}: {trade_error}", pair=symbol, console=1, log=1, telegram=0)
+                        continue
+                        
             except Exception as e:
                 error_msg = str(e).lower()
                 if "order not exist" in error_msg or "80016" in error_msg:
