@@ -194,7 +194,7 @@ def printPositionsTable():
                 tickers[symbol] = ticker
     except Exception:
         tickers = {}
-    header = f"{'Hora':19} | {'Par':25} | {'TP':>4} {'SL':>5} | {'%':>8} | {'Inversión':>14} | {'Entrada':>10} | {'TP':>10} | {'SL':>10} | {'Abierta':>12}"
+    header = f"{'Hora':19} | {'Par':25} | {'TP':>8} | {'SL':>8} | {'%':>13} | {'Inversión':>14} | {'Entrada':>10} | {'TP':>10} | {'SL':>10} | {'Abierta':>12}"
     print()
     print('-'*len(header))
     print(header)
@@ -235,12 +235,7 @@ def printPositionsTable():
         ticker = tickers.get(pos.get('symbol', ''), {})
         currentPrice = ticker.get('last', openPrice)
         pct = ((currentPrice - openPrice) / openPrice) * 100 if openPrice else 0
-        pctStr = fmtNum(pct, 3, 2)
-        # Ajusta espacios para cuadrar la columna % y alinear el símbolo
-        if pct >= 0:
-            pctStr = f" {pctStr} %"
-        else:
-            pctStr = f"{pctStr} %"
+        pctStr = f"{pct:.2f} %"
         # Color logic for profit-loss percentage
         if pct >= 0:
             pctColor = 'green'
@@ -259,7 +254,7 @@ def printPositionsTable():
             else:
                 pctColor = 'red'
         hora = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-        print(f"{hora:19} | {symbol} | {tpPercentStr:>5} {slPercentStr:>5} | {colorText(pctStr, pctColor):>10} | {investStr:>14} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
+        print(f"{hora:19} | {symbol} | {tpPercentStr:>8} | {slPercentStr:>8} | {colorText(pctStr, pctColor):>13} | {investStr:>14} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
 
 def monitorPositions():
     from logManager import messages
