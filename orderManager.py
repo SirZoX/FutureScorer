@@ -794,7 +794,7 @@ class OrderManager:
 
     def notifyPositionClosed(self, symbol):
         """
-        Send notification for a closed position without detailed P/L calculation
+        Send notification for a closed position with detailed P/L calculation including fees
         Used when position is detected as closed but detailed info is not available
         """
         try:
@@ -802,11 +802,92 @@ class OrderManager:
             if position.get('notified', False):
                 return  # Already notified
                 
-            # Simple closure notification
-            messages(
-                f"🔔 Position closed: {symbol} (detected via exchange sync)",
-                pair=symbol, console=1, log=1, telegram=1
-            )
+            # Get position data
+            openPrice = float(position.get('openPrice', 0))
+            amount = float(position.get('amount', 0))
+            openTsUnix = position.get('open_ts_unix', 0)
+            
+            if not openPrice or not amount or not openTsUnix:
+                # Fallback to simple notification if data is missing
+                messages(
+                    f"🔔 Position closed: {symbol} (detected via exchange sync)",
+                    pair=symbol, console=1, log=1, telegram=1
+                )
+                position['notified'] = True
+                self.positions[symbol] = position
+                return
+            
+            # Get all trades for this symbol since position opened
+            try:
+                allTrades = self.exchange.fetch_my_trades(symbol)
+                relevantTrades = [
+                    t for t in allTrades
+                    if t.get('timestamp', 0) >= openTsUnix * 1000
+                ]
+                
+                buyTrades = [t for t in relevantTrades if t.get('side') == 'buy']
+                sellTrades = [t for t in relevantTrades if t.get('side') == 'sell']
+                
+                if not sellTrades:
+                    # No sell trades found, fallback to simple notification
+                    messages(
+                        f"🔔 Position closed: {symbol} (detected via exchange sync - no sell trades found)",
+                        pair=symbol, console=1, log=1, telegram=1
+                    )
+                    position['notified'] = True
+                    self.positions[symbol] = position
+                    return
+                
+                # Calculate average buy and sell prices
+                totalBuyAmount = sum(float(t.get('amount', 0)) for t in buyTrades)
+                totalBuyValue = sum(float(t.get('amount', 0)) * float(t.get('price', 0)) for t in buyTrades)
+                avgBuyPrice = totalBuyValue / totalBuyAmount if totalBuyAmount > 0 else openPrice
+                
+                totalSellAmount = sum(float(t.get('amount', 0)) for t in sellTrades)
+                totalSellValue = sum(float(t.get('amount', 0)) * float(t.get('price', 0)) for t in sellTrades)
+                avgSellPrice = totalSellValue / totalSellAmount if totalSellAmount > 0 else 0
+                
+                # Calculate gross P/L
+                grossProfitQuote = totalSellValue - totalBuyValue
+                
+                # Calculate fees (assume same fee rate for buy and sell, multiply by 2)
+                # Get fee from the most recent trade (buy or sell)
+                recentTrade = max(relevantTrades, key=lambda t: t.get('timestamp', 0))
+                feeRate = 0
+                if recentTrade.get('fee') and recentTrade.get('fee', {}).get('rate'):
+                    feeRate = float(recentTrade.get('fee', {}).get('rate', 0))
+                elif recentTrade.get('fee') and recentTrade.get('fee', {}).get('cost'):
+                    # Calculate fee rate from cost and value
+                    feeCost = float(recentTrade.get('fee', {}).get('cost', 0))
+                    tradeValue = float(recentTrade.get('amount', 0)) * float(recentTrade.get('price', 0))
+                    feeRate = feeCost / tradeValue if tradeValue > 0 else 0
+                
+                # Estimate total fees (buy fee + sell fee)
+                totalFees = (totalBuyValue * feeRate) + (totalSellValue * feeRate)
+                
+                # Calculate net P/L
+                netProfitQuote = grossProfitQuote - totalFees
+                netProfitPct = ((avgSellPrice / avgBuyPrice - 1) * 100) if avgBuyPrice > 0 else 0
+                
+                # Determine icon
+                icon = "💰💰" if netProfitQuote > 0 else "☠️☠️"
+                
+                # Send detailed notification
+                messages(
+                    f"{icon} Position closed: {symbol} — P/L: {netProfitQuote:.4f} USDC ({netProfitPct:.2f}%) [Fees: {totalFees:.4f}]",
+                    pair=symbol, console=1, log=1, telegram=1
+                )
+                
+                messages(f"[DEBUG] {symbol} P/L calculation: Gross={grossProfitQuote:.4f}, Fees={totalFees:.4f}, Net={netProfitQuote:.4f}, Buy={avgBuyPrice:.6f}, Sell={avgSellPrice:.6f}", 
+                        pair=symbol, console=0, log=1, telegram=0)
+                
+            except Exception as trade_error:
+                messages(f"[ERROR] Could not calculate P/L for {symbol}: {trade_error}", pair=symbol, console=0, log=1, telegram=0)
+                # Fallback to simple notification
+                messages(
+                    f"🔔 Position closed: {symbol} (detected via exchange sync - P/L calculation failed)",
+                    pair=symbol, console=1, log=1, telegram=1
+                )
             
             # Mark as notified
             position['notified'] = True
