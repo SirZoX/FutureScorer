@@ -100,6 +100,47 @@ class OrderManager:
         
         return None
 
+    def getExchangeOpenPositions(self):
+        """
+        Get currently open positions from the exchange
+        Returns a set of symbols with open positions
+        """
+        try:
+            positions = self.exchange.fetch_positions()
+            openSymbols = set()
+            for pos in positions:
+                if float(pos.get('contracts', 0)) > 0:  # Position has contracts
+                    openSymbols.add(pos.get('symbol', ''))
+            return openSymbols
+        except Exception as e:
+            messages(f"[ERROR] Could not fetch exchange positions: {e}", console=1, log=1, telegram=0)
+            return set()
+
+    def cleanClosedPositions(self):
+        """
+        Clean positions that are no longer open on the exchange
+        """
+        try:
+            exchangeOpenSymbols = self.getExchangeOpenPositions()
+            localSymbols = set(self.positions.keys())
+            
+            # Find positions that are in local file but not on exchange
+            closedSymbols = localSymbols - exchangeOpenSymbols
+            
+            if closedSymbols:
+                messages(f"Found {len(closedSymbols)} positions to clean: {', '.join(closedSymbols)}", console=1, log=1, telegram=0)
+                for symbol in closedSymbols:
+                    messages(f"Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
+                    self.positions.pop(symbol, None)
+                
+                self.savePositions()
+                messages(f"Cleaned {len(closedSymbols)} closed positions from local file", console=1, log=1, telegram=0)
+            else:
+                messages("No closed positions found to clean", console=0, log=1, telegram=0)
+                
+        except Exception as e:
+            messages(f"[ERROR] Error cleaning closed positions: {e}", console=1, log=1, telegram=0)
+
     def calculateOrderSize(self, symbol):
         """
         English comment: calculate how much baseAsset is needed
@@ -239,6 +280,10 @@ class OrderManager:
         #messages("Analyzing positions", console=1, log=1, telegram=0)
         # Cargar siempre desde disco para evitar inconsistencias
         self.positions = self.loadPositions()
+        
+        # First, clean positions that are no longer open on the exchange
+        self.cleanClosedPositions()
+        
         symbols_to_remove = []
         for symbol, position in self.positions.items():
             buyQuantity  = float(position.get('amount', 0))
