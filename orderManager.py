@@ -244,32 +244,26 @@ class OrderManager:
             except Exception as e:
                 error_msg = str(e).lower()
                 if "order not exist" in error_msg or "80016" in error_msg:
-                    # Order doesn't exist, but this doesn't mean position is closed
-                    # Check if position is still active before assuming closure
+                    # Order doesn't exist - this is normal for active positions with TP/SL orders
+                    # Only process as closure if we can confirm actual trades occurred
                     try:
-                        querySymbol = symbol if symbol.endswith(':USDT') else symbol + ':USDT'
-                        posList = self.exchange.fetch_positions([querySymbol])
-                        contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
+                        allTrades = self.exchange.fetch_my_trades(symbol)
+                        relevantTrades = [
+                            t for t in allTrades
+                            if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
+                        ]
                         
-                        if contractsOpen:
-                            # Position is still active, orders might have been cancelled/recreated
-                            messages(f"[DEBUG] Orders not found but position still active for {symbol}, skipping", pair=symbol, console=0, log=1, telegram=0)
+                        if not relevantTrades:
+                            # No sell trades found, position is likely still active
+                            messages(f"No sell trades found for {symbol}, assuming position still active", pair=symbol, console=0, log=1, telegram=0)
                             continue
-                        else:
-                            # Before assuming closure, also check open orders to see if position is really closed
-                            try:
-                                openOrders = self.exchange.fetch_open_orders(querySymbol)
-                                if openOrders:
-                                    messages(f"[DEBUG] No contracts but open orders exist for {symbol}, skipping", pair=symbol, console=0, log=1, telegram=0)
-                                    continue
-                            except Exception:
-                                pass
-                            
-                            # Position is closed and orders don't exist, check for closure
-                            messages(f"Position confirmed closed for {symbol}, checking trades for P/L calculation", pair=symbol, console=1, log=1, telegram=0)
-                            tpStatus = 'filled'  # Assume executed to trigger trade analysis
-                    except Exception as pos_error:
-                        messages(f"[ERROR] Could not verify position status for {symbol}: {pos_error}", pair=symbol, console=1, log=1, telegram=0)
+                        
+                        # Found sell trades, position is likely closed
+                        messages(f"Sell trades found for {symbol}, processing closure", pair=symbol, console=1, log=1, telegram=0)
+                        tpStatus = 'filled'  # Trigger closure processing
+                        
+                    except Exception as trade_error:
+                        messages(f"[ERROR] Could not fetch trades for {symbol}: {trade_error}", pair=symbol, console=1, log=1, telegram=0)
                         continue
                 else:
                     messages(f"[ERROR] fetch_order failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
