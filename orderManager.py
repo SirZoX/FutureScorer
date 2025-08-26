@@ -102,9 +102,11 @@ class OrderManager:
 
     def getExchangeOpenPositions(self, maxRetries=3, retryDelay=2):
         """
-        Get currently open positions from the exchange with retry logic
+        Get currently open positions from the exchange with enhanced retry logic
         Returns a set of symbols with open positions
         """
+        consecutiveZeroResults = 0
+        
         for attempt in range(maxRetries):
             try:
                 positions = self.exchange.fetch_positions()
@@ -125,6 +127,16 @@ class OrderManager:
                         messages(f"[DEBUG] Added {symbol} to open positions", console=0, log=1, telegram=0)
                 
                 messages(f"[DEBUG] Final open symbols: {openSymbols} (attempt {attempt + 1})", console=0, log=1, telegram=0)
+                
+                # Track consecutive zero results to detect API issues
+                if len(positions) == 0:
+                    consecutiveZeroResults += 1
+                    if consecutiveZeroResults >= 2 and attempt < maxRetries - 1:
+                        messages(f"[WARNING] Exchange returned 0 positions {consecutiveZeroResults} times consecutively, possible API issue. Retrying in {retryDelay}s", console=0, log=1, telegram=0)
+                        time.sleep(retryDelay)
+                        continue
+                else:
+                    consecutiveZeroResults = 0  # Reset counter
                 
                 # If we got any positions, return immediately (successful result)
                 if len(positions) > 0 or attempt == maxRetries - 1:
@@ -152,7 +164,7 @@ class OrderManager:
     def cleanClosedPositions(self):
         """
         Clean positions that are no longer open on the exchange
-        Added safety mechanism to avoid false deletions due to API inconsistency
+        Added enhanced safety mechanism to avoid false deletions due to API inconsistency
         """
         try:
             exchangeOpenSymbols = self.getExchangeOpenPositions()
@@ -167,29 +179,42 @@ class OrderManager:
             if potentialClosedSymbols:
                 messages(f"[DEBUG] Potentially closed positions detected: {potentialClosedSymbols}", console=0, log=1, telegram=0)
                 
-                # Safety check: only remove positions that are old enough (at least 60 seconds)
+                # Enhanced safety check: only remove positions that are old enough AND confirmed closed via trades
                 currentTime = time.time()
                 symbolsToRemove = []
+                symbolsToNotify = []
                 
                 for symbol in potentialClosedSymbols:
                     position = self.positions.get(symbol, {})
                     openTime = position.get('open_ts_unix', currentTime)
                     timeSinceOpen = currentTime - openTime
                     
-                    if timeSinceOpen >= 60:  # Position must be at least 60 seconds old
-                        symbolsToRemove.append(symbol)
-                        messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old, safe to remove", console=0, log=1, telegram=0)
+                    # Increased safety time to 120 seconds due to BingX API inconsistencies
+                    if timeSinceOpen >= 120:
+                        # Double-check by looking for sell trades to confirm closure
+                        hasClosingTrade = self.checkForClosingTrade(symbol)
+                        
+                        if hasClosingTrade or timeSinceOpen >= 300:  # 5 minutes - definitely closed
+                            symbolsToRemove.append(symbol)
+                            symbolsToNotify.append(symbol)
+                            messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old and confirmed closed, safe to remove", console=0, log=1, telegram=0)
+                        else:
+                            messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old but no closing trade found, keeping for safety", console=0, log=1, telegram=0)
                     else:
                         messages(f"[DEBUG] Position {symbol} is only {timeSinceOpen:.1f}s old, keeping for safety", console=0, log=1, telegram=0)
                 
+                # Send notifications for closed positions before removing them
+                for symbol in symbolsToNotify:
+                    self.notifyPositionClosed(symbol)
+                
                 if symbolsToRemove:
-                    messages(f"Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=1, log=1, telegram=0)
+                    messages(f"Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=0, log=1, telegram=0)
                     for symbol in symbolsToRemove:
-                        messages(f"Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
+                        messages(f"Removing closed position {symbol} from local file", pair=symbol, console=0, log=1, telegram=0)
                         self.positions.pop(symbol, None)
                     
                     self.savePositions()
-                    messages(f"Cleaned {len(symbolsToRemove)} closed positions from local file", console=1, log=1, telegram=0)
+                    messages(f"Cleaned {len(symbolsToRemove)} closed positions from local file", console=0, log=1, telegram=0)
                 else:
                     messages("No positions old enough to be safely removed", console=0, log=1, telegram=0)
             else:
@@ -740,6 +765,56 @@ class OrderManager:
                 messages(f"[INFO] Take profit order creada: {tpOrder}", log=1)
             except Exception as e:
                 messages(f"[ERROR] Error creando take profit: {e}", log=1)
+
+    def checkForClosingTrade(self, symbol):
+        """
+        Check if there are any sell trades for a position to confirm closure
+        Returns True if sell trades are found, False otherwise
+        """
+        try:
+            position = self.positions.get(symbol, {})
+            openTsUnix = position.get('open_ts_unix', 0)
+            
+            allTrades = self.exchange.fetch_my_trades(symbol)
+            relevantTrades = [
+                t for t in allTrades
+                if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
+            ]
+            
+            if relevantTrades:
+                messages(f"[DEBUG] Found {len(relevantTrades)} closing trades for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                return True
+            else:
+                messages(f"[DEBUG] No closing trades found for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                return False
+                
+        except Exception as e:
+            messages(f"[ERROR] Could not check closing trades for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            return False
+
+    def notifyPositionClosed(self, symbol):
+        """
+        Send notification for a closed position without detailed P/L calculation
+        Used when position is detected as closed but detailed info is not available
+        """
+        try:
+            position = self.positions.get(symbol, {})
+            if position.get('notified', False):
+                return  # Already notified
+                
+            # Simple closure notification
+            messages(
+                f"🔔 Position closed: {symbol} (detected via exchange sync)",
+                pair=symbol, console=1, log=1, telegram=1
+            )
+            
+            # Mark as notified
+            position['notified'] = True
+            self.positions[symbol] = position
+            
+        except Exception as e:
+            messages(f"[ERROR] Failed to notify closure for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
+
         # ...existing code...
 
 
