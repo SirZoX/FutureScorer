@@ -100,38 +100,59 @@ class OrderManager:
         
         return None
 
-    def getExchangeOpenPositions(self):
+    def getExchangeOpenPositions(self, maxRetries=3, retryDelay=2):
         """
-        Get currently open positions from the exchange
+        Get currently open positions from the exchange with retry logic
         Returns a set of symbols with open positions
         """
-        try:
-            positions = self.exchange.fetch_positions()
-            openSymbols = set()
-            messages(f"[DEBUG] Exchange returned {len(positions)} positions", console=0, log=1, telegram=0)
-            
-            for pos in positions:
-                symbol = pos.get('symbol', '')
-                contracts = float(pos.get('contracts', 0))
-                side = pos.get('side', '')
-                notional = pos.get('notional', 0)
-                unrealizedPnl = pos.get('unrealizedPnl', 0)
+        for attempt in range(maxRetries):
+            try:
+                positions = self.exchange.fetch_positions()
+                openSymbols = set()
+                messages(f"[DEBUG] Exchange returned {len(positions)} positions (attempt {attempt + 1}/{maxRetries})", console=0, log=1, telegram=0)
                 
-                messages(f"[DEBUG] Position: {symbol} contracts={contracts} side={side} notional={notional} pnl={unrealizedPnl}", console=0, log=1, telegram=0)
+                for pos in positions:
+                    symbol = pos.get('symbol', '')
+                    contracts = float(pos.get('contracts', 0))
+                    side = pos.get('side', '')
+                    notional = pos.get('notional', 0)
+                    unrealizedPnl = pos.get('unrealizedPnl', 0)
+                    
+                    messages(f"[DEBUG] Position: {symbol} contracts={contracts} side={side} notional={notional} pnl={unrealizedPnl}", console=0, log=1, telegram=0)
+                    
+                    if contracts > 0:  # Position has contracts
+                        openSymbols.add(symbol)
+                        messages(f"[DEBUG] Added {symbol} to open positions", console=0, log=1, telegram=0)
                 
-                if contracts > 0:  # Position has contracts
-                    openSymbols.add(symbol)
-                    messages(f"[DEBUG] Added {symbol} to open positions", console=0, log=1, telegram=0)
-            
-            messages(f"[DEBUG] Final open symbols: {openSymbols}", console=0, log=1, telegram=0)
-            return openSymbols
-        except Exception as e:
-            messages(f"[ERROR] Could not fetch exchange positions: {e}", console=1, log=1, telegram=0)
-            return set()
+                messages(f"[DEBUG] Final open symbols: {openSymbols} (attempt {attempt + 1})", console=0, log=1, telegram=0)
+                
+                # If we got any positions, return immediately (successful result)
+                if len(positions) > 0 or attempt == maxRetries - 1:
+                    return openSymbols
+                    
+                # If we got 0 positions and it's not the last attempt, retry
+                if len(positions) == 0 and attempt < maxRetries - 1:
+                    messages(f"[WARNING] Exchange returned 0 positions, retrying in {retryDelay}s", console=0, log=1, telegram=0)
+                    time.sleep(retryDelay)
+                    continue
+                    
+                return openSymbols
+                
+            except Exception as e:
+                if attempt < maxRetries - 1:
+                    messages(f"[ERROR] Could not fetch exchange positions (attempt {attempt + 1}): {e}, retrying", console=0, log=1, telegram=0)
+                    time.sleep(retryDelay)
+                    continue
+                else:
+                    messages(f"[ERROR] Could not fetch exchange positions after {maxRetries} attempts: {e}", console=1, log=1, telegram=0)
+                    return set()
+        
+        return set()
 
     def cleanClosedPositions(self):
         """
         Clean positions that are no longer open on the exchange
+        Added safety mechanism to avoid false deletions due to API inconsistency
         """
         try:
             exchangeOpenSymbols = self.getExchangeOpenPositions()
@@ -141,16 +162,36 @@ class OrderManager:
             messages(f"[DEBUG] Exchange open positions: {exchangeOpenSymbols}", console=0, log=1, telegram=0)
             
             # Find positions that are in local file but not on exchange
-            closedSymbols = localSymbols - exchangeOpenSymbols
+            potentialClosedSymbols = localSymbols - exchangeOpenSymbols
             
-            if closedSymbols:
-                messages(f"Found {len(closedSymbols)} positions to clean: {', '.join(closedSymbols)}", console=1, log=1, telegram=0)
-                for symbol in closedSymbols:
-                    messages(f"Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
-                    self.positions.pop(symbol, None)
+            if potentialClosedSymbols:
+                messages(f"[DEBUG] Potentially closed positions detected: {potentialClosedSymbols}", console=0, log=1, telegram=0)
                 
-                self.savePositions()
-                messages(f"Cleaned {len(closedSymbols)} closed positions from local file", console=1, log=1, telegram=0)
+                # Safety check: only remove positions that are old enough (at least 60 seconds)
+                currentTime = time.time()
+                symbolsToRemove = []
+                
+                for symbol in potentialClosedSymbols:
+                    position = self.positions.get(symbol, {})
+                    openTime = position.get('open_ts_unix', currentTime)
+                    timeSinceOpen = currentTime - openTime
+                    
+                    if timeSinceOpen >= 60:  # Position must be at least 60 seconds old
+                        symbolsToRemove.append(symbol)
+                        messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old, safe to remove", console=0, log=1, telegram=0)
+                    else:
+                        messages(f"[DEBUG] Position {symbol} is only {timeSinceOpen:.1f}s old, keeping for safety", console=0, log=1, telegram=0)
+                
+                if symbolsToRemove:
+                    messages(f"Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=1, log=1, telegram=0)
+                    for symbol in symbolsToRemove:
+                        messages(f"Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
+                        self.positions.pop(symbol, None)
+                    
+                    self.savePositions()
+                    messages(f"Cleaned {len(symbolsToRemove)} closed positions from local file", console=1, log=1, telegram=0)
+                else:
+                    messages("No positions old enough to be safely removed", console=0, log=1, telegram=0)
             else:
                 messages("No closed positions found to clean", console=0, log=1, telegram=0)
                 
