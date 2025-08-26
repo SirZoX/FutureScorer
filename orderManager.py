@@ -216,6 +216,7 @@ class OrderManager:
         self.positions = self.loadPositions()
         symbols_to_remove = []
         for symbol, position in self.positions.items():
+            messages(f"[DEBUG] Processing position: {symbol}", pair=symbol, console=0, log=1, telegram=0)
             buyQuantity  = float(position.get('amount', 0))
             buyPrice     = float(position.get('openPrice', 0))
             tsOpenIso    = position.get('timestamp')  # ISO string
@@ -234,22 +235,29 @@ class OrderManager:
             # Usar el TP/SL activo (2 si existe, si no el 1)
             activeTpOrderId = tpOrderId2 if tpOrderId2 else tpOrderId1
             activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
+            
+            messages(f"[DEBUG] {symbol} - TP Order: {activeTpOrderId}, SL Order: {activeSlOrderId}", pair=symbol, console=0, log=1, telegram=0)
             try:
                 if activeTpOrderId:
                     tpInfo = self.exchange.fetch_order(activeTpOrderId, symbol)
                     tpStatus = str(tpInfo.get('status', '')).lower()
+                    messages(f"[DEBUG] {symbol} TP order status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
                 if activeSlOrderId:
                     slInfo = self.exchange.fetch_order(activeSlOrderId, symbol)
                     slStatus = str(slInfo.get('status', '')).lower()
+                    messages(f"[DEBUG] {symbol} SL order status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
             except Exception as e:
                 error_msg = str(e).lower()
+                messages(f"[DEBUG] {symbol} fetch_order error: {e}", pair=symbol, console=0, log=1, telegram=0)
                 if "order not exist" in error_msg or "80016" in error_msg:
                     # Order doesn't exist, but this doesn't mean position is closed
                     # Check if position is still active before assuming closure
                     try:
                         querySymbol = symbol if symbol.endswith(':USDT') else symbol + ':USDT'
+                        messages(f"[DEBUG] {symbol} checking position with querySymbol: {querySymbol}", pair=symbol, console=0, log=1, telegram=0)
                         posList = self.exchange.fetch_positions([querySymbol])
                         contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
+                        messages(f"[DEBUG] {symbol} position check - contractsOpen: {contractsOpen}", pair=symbol, console=0, log=1, telegram=0)
                         
                         if contractsOpen:
                             # Position is still active, orders might have been cancelled/recreated
