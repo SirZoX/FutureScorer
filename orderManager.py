@@ -370,7 +370,7 @@ class OrderManager:
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
         messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=0, log=1, telegram=0)
         info = self.markets.get(normSymbol, {}).get('info', {})
-        messages(f"[DEBUG] info markets: {json.dumps(info, indent=2)}", console=0, log=1, telegram=0)
+        messages(f"[DEBUG] info markets: {json.dumps(info)}", console=0, log=1, telegram=0)
         pf = next((f for f in info.get('filters', []) if f.get('filterType') == 'PRICE_FILTER'), {})
         ls = next((f for f in info.get('filters', []) if f.get('filterType') == 'LOT_SIZE'), {})
         tickSize = Decimal(pf.get('tickSize', info.get('tickSize', '0'))) or None
