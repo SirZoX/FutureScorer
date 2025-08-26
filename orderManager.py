@@ -108,9 +108,22 @@ class OrderManager:
         try:
             positions = self.exchange.fetch_positions()
             openSymbols = set()
+            messages(f"[DEBUG] Exchange returned {len(positions)} positions", console=0, log=1, telegram=0)
+            
             for pos in positions:
-                if float(pos.get('contracts', 0)) > 0:  # Position has contracts
-                    openSymbols.add(pos.get('symbol', ''))
+                symbol = pos.get('symbol', '')
+                contracts = float(pos.get('contracts', 0))
+                side = pos.get('side', '')
+                notional = pos.get('notional', 0)
+                unrealizedPnl = pos.get('unrealizedPnl', 0)
+                
+                messages(f"[DEBUG] Position: {symbol} contracts={contracts} side={side} notional={notional} pnl={unrealizedPnl}", console=0, log=1, telegram=0)
+                
+                if contracts > 0:  # Position has contracts
+                    openSymbols.add(symbol)
+                    messages(f"[DEBUG] Added {symbol} to open positions", console=0, log=1, telegram=0)
+            
+            messages(f"[DEBUG] Final open symbols: {openSymbols}", console=0, log=1, telegram=0)
             return openSymbols
         except Exception as e:
             messages(f"[ERROR] Could not fetch exchange positions: {e}", console=1, log=1, telegram=0)
@@ -123,6 +136,9 @@ class OrderManager:
         try:
             exchangeOpenSymbols = self.getExchangeOpenPositions()
             localSymbols = set(self.positions.keys())
+            
+            messages(f"[DEBUG] Local positions: {localSymbols}", console=0, log=1, telegram=0)
+            messages(f"[DEBUG] Exchange open positions: {exchangeOpenSymbols}", console=0, log=1, telegram=0)
             
             # Find positions that are in local file but not on exchange
             closedSymbols = localSymbols - exchangeOpenSymbols
