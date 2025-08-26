@@ -106,7 +106,7 @@ def syncOpenedPositions():
         # Use OrderManager.updatePositions() which handles closing positions and Telegram notifications
         om = OrderManager()
         om.updatePositions()
-        messages("[SYNC] Position synchronization completed", console=1, log=1, telegram=0)
+        messages("[SYNC] Position synchronization completed", console=0, log=1, telegram=0)
     except Exception as e:
         messages(f"[SYNC] Error during position synchronization: {e}", console=1, log=1, telegram=1)
 
@@ -235,7 +235,7 @@ def printPositionsTable():
         ticker = tickers.get(pos.get('symbol', ''), {})
         currentPrice = ticker.get('last', openPrice)
         pct = ((currentPrice - openPrice) / openPrice) * 100 if openPrice else 0
-        pctStr = f"{pct:.2f} %"
+        pctStr = f"{pct:+.2f} %"  # Always show sign (+/-) for consistent width
         # Color logic for profit-loss percentage
         if pct >= 0:
             pctColor = 'green'

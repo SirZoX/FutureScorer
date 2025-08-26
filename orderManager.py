@@ -75,6 +75,30 @@ class OrderManager:
         # Reconcile local JSON with exchange state
         self.updatePositions()
 
+    def fetchOrderWithRetry(self, orderId, symbol, maxRetries=3, delay=2):
+        """
+        Fetch order with retry logic for rate limiting errors (100410)
+        """
+        for attempt in range(maxRetries):
+            try:
+                return self.exchange.fetch_order(orderId, symbol)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "100410" in error_msg or "please try again later" in error_msg:
+                    if attempt < maxRetries - 1:
+                        messages(f"Rate limit hit for {symbol}, retrying in {delay}s (attempt {attempt + 1}/{maxRetries})", pair=symbol, console=0, log=1, telegram=0)
+                        time.sleep(delay)
+                        delay *= 1.5  # Exponential backoff
+                        continue
+                    else:
+                        messages(f"Max retries reached for {symbol} order {orderId}, skipping this check", pair=symbol, console=1, log=1, telegram=0)
+                        raise e
+                else:
+                    # Not a rate limit error, re-raise immediately
+                    raise e
+        
+        return None
+
     def calculateOrderSize(self, symbol):
         """
         English comment: calculate how much baseAsset is needed
@@ -236,10 +260,10 @@ class OrderManager:
             activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
             try:
                 if activeTpOrderId:
-                    tpInfo = self.exchange.fetch_order(activeTpOrderId, symbol)
+                    tpInfo = self.fetchOrderWithRetry(activeTpOrderId, symbol)
                     tpStatus = str(tpInfo.get('status', '')).lower()
                 if activeSlOrderId:
-                    slInfo = self.exchange.fetch_order(activeSlOrderId, symbol)
+                    slInfo = self.fetchOrderWithRetry(activeSlOrderId, symbol)
                     slStatus = str(slInfo.get('status', '')).lower()
             except Exception as e:
                 error_msg = str(e).lower()
@@ -265,6 +289,10 @@ class OrderManager:
                     except Exception as trade_error:
                         messages(f"[ERROR] Could not fetch trades for {symbol}: {trade_error}", pair=symbol, console=1, log=1, telegram=0)
                         continue
+                elif "100410" in error_msg or "please try again later" in error_msg:
+                    # Rate limiting error already handled by fetchOrderWithRetry, skip this symbol
+                    messages(f"[RATE LIMIT] Skipping {symbol} due to API rate limiting", pair=symbol, console=0, log=1, telegram=0)
+                    continue
                 else:
                     messages(f"[ERROR] fetch_order failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
                     continue
