@@ -88,8 +88,21 @@ def syncOpenedPositions():
     """
     from orderManager import OrderManager
     from logManager import messages
+    import json
+    from gvars import positionsFile
     
     try:
+        # Check if there are positions to process
+        try:
+            with open(positionsFile, encoding='utf-8') as f:
+                positions = json.load(f)
+        except Exception:
+            positions = {}
+        
+        if not positions:
+            # No positions to sync, exit silently
+            return
+            
         # Use OrderManager.updatePositions() which handles closing positions and Telegram notifications
         om = OrderManager()
         om.updatePositions()
