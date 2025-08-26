@@ -179,7 +179,7 @@ class OrderManager:
             if potentialClosedSymbols:
                 messages(f"[DEBUG] Potentially closed positions detected: {potentialClosedSymbols}", console=0, log=1, telegram=0)
                 
-                # Enhanced safety check: only remove positions that are old enough AND confirmed closed via trades
+                # Enhanced safety check: only remove positions with confirmed closing trades
                 currentTime = time.time()
                 symbolsToRemove = []
                 symbolsToNotify = []
@@ -189,19 +189,16 @@ class OrderManager:
                     openTime = position.get('open_ts_unix', currentTime)
                     timeSinceOpen = currentTime - openTime
                     
-                    # Increased safety time to 120 seconds due to BingX API inconsistencies
-                    if timeSinceOpen >= 120:
-                        # Double-check by looking for sell trades to confirm closure
-                        hasClosingTrade = self.checkForClosingTrade(symbol)
-                        
-                        if hasClosingTrade or timeSinceOpen >= 300:  # 5 minutes - definitely closed
-                            symbolsToRemove.append(symbol)
-                            symbolsToNotify.append(symbol)
-                            messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old and confirmed closed, safe to remove", console=0, log=1, telegram=0)
-                        else:
-                            messages(f"[DEBUG] Position {symbol} is {timeSinceOpen:.1f}s old but no closing trade found, keeping for safety", console=0, log=1, telegram=0)
+                    # Check for closing trades to confirm the position is actually closed
+                    hasClosingTrade = self.checkForClosingTrade(symbol)
+                    
+                    if hasClosingTrade:
+                        # Only remove if we have confirmed closing trades
+                        symbolsToRemove.append(symbol)
+                        symbolsToNotify.append(symbol)
+                        messages(f"[DEBUG] Position {symbol} confirmed closed via trades, safe to remove", console=0, log=1, telegram=0)
                     else:
-                        messages(f"[DEBUG] Position {symbol} is only {timeSinceOpen:.1f}s old, keeping for safety", console=0, log=1, telegram=0)
+                        messages(f"[DEBUG] Position {symbol} not found on exchange but no closing trades found, keeping for safety", console=0, log=1, telegram=0)
                 
                 # Send notifications for closed positions before removing them
                 for symbol in symbolsToNotify:
