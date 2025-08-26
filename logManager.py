@@ -79,7 +79,7 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
         apiUrl = f"https://api.telegram.org/bot{token}/sendPhoto"
         successful_sends = []
         for path in plotPaths:
-            norm_path = path.replace('\\', '/').replace('//', '/')
+            norm_path = path.replace('\\', '/').replace('//', '/').replace("_USDT", "")
             # Verificar que el archivo existe antes de enviarlo
             if not os.path.exists(norm_path):
                 messages(f"Plot file not found, skipping: {norm_path}", console=1, log=1, telegram=0)

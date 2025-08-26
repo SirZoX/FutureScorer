@@ -86,12 +86,12 @@ def syncOpenedPositions():
     """
     Sync opened positions removing closed positions and sending results via Telegram
     """
-    from orderManager import orderManager
+    from orderManager import OrderManager
     from logManager import messages
     
     try:
-        # Use orderManager.updatePositions() which handles closing positions and Telegram notifications
-        om = orderManager()
+        # Use OrderManager.updatePositions() which handles closing positions and Telegram notifications
+        om = OrderManager()
         om.updatePositions()
         messages("[SYNC] Position synchronization completed", console=1, log=1, telegram=0)
     except Exception as e:
