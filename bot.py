@@ -1,3 +1,4 @@
+print ("\r\n\r\n")
 import threading
 import positionMonitor
 from positionMonitor import monitorActive
@@ -5,7 +6,6 @@ import os
 import sys
 import schedule
 from datetime import datetime
-from rich import print
 
 # Import messages early so it's available from the start
 from logManager import messages
