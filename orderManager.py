@@ -5,7 +5,7 @@ import os
 import csv
 import time
 
-from logManager import messages, sendPlotsByTelegram
+from logManager import messages
 from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
 from plotting import savePlot
 from configManager import configManager
@@ -524,16 +524,10 @@ class OrderManager:
                 'score': oppData.get('score')
             }
             plot_path = savePlot(item)
-            # Normalizar ruta del plot para Windows y Telegram
-            plot_path = plot_path.replace('\\', '/').replace('\\', '/').replace('//', '/')
-            # Eliminar sufijo _USDT si existe en el nombre del plot
-            plot_path = plot_path.replace('_USDT.png', '.png').replace('_USDT', '')
-            percent = int(investmentPct * 100)
-            caption = f"{symbol}\nInvestment: {investUSDC:.0f} USDC ({percent}%)\nEntry Price: {float(openPrice):.3f}\nTP: {float(tpPrice):.3f}\nSL: {float(slPrice):.3f}"
-            sendPlotsByTelegram([plot_path], caption=caption)
-            messages(f"Plot sent to Telegram for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+            # Plot will be sent by pairs.py, no need to send it here again
+            messages(f"Plot generated for {symbol}: {plot_path}", pair=symbol, console=0, log=1, telegram=0)
         except Exception as e:
-            messages(f"[ERROR] No se pudo enviar el plot por Telegram para {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
+            messages(f"[ERROR] No se pudo generar el plot para {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
         self.savePositions()
         return record
 
