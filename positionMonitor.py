@@ -84,45 +84,18 @@ def manageDynamicTpSl():
 
 def syncOpenedPositions():
     """
-    Syncs openedPositions.json with actual open positions in BingX.
-    Removes from the file any position that is not open in the exchange (ni órdenes ni posición activa).
+    Sync opened positions removing closed positions and sending results via Telegram
     """
-    from connector import bingxConnector
-    from gvars import positionsFile
+    from orderManager import orderManager
     from logManager import messages
-    from logManager import messages # log_info, log_error
-    import time
+    
     try:
-        with open(positionsFile, encoding='utf-8') as f:
-            positions = json.load(f)
+        # Use orderManager.updatePositions() which handles closing positions and Telegram notifications
+        om = orderManager()
+        om.updatePositions()
+        messages("[SYNC] Position synchronization completed", console=1, log=1, telegram=0)
     except Exception as e:
-        messages(f"[SYNC] Error loading positions: {e}", console=1, log=1, telegram=1)
-        return
-    exchange = bingxConnector()
-    toRemove = []
-    for symbol in list(positions.keys()):
-        # Para BingX futures, usar el símbolo completo con :USDT
-        querySymbol = symbol if symbol.endswith(':USDT') else symbol + ':USDT'
-        try:
-            # Verifica órdenes abiertas
-            orders = exchange.fetch_open_orders(querySymbol)
-            # Verifica posición activa
-            posList = exchange.fetch_positions([querySymbol])
-            contractsOpen = any(p.get('contracts', 0) > 0 for p in posList)
-            # Si no hay órdenes abiertas y tampoco posición activa, elimina del fichero
-            if not orders and not contractsOpen:
-                messages(f"[SYNC] Eliminando posición cerrada: {symbol}", console=1, log=1, telegram=0)
-                toRemove.append(symbol)
-            time.sleep(0.5)
-        except Exception as e:
-            messages(f"[SYNC] Error consultando {symbol}: {e}", console=1, log=1, telegram=1)
-            continue
-    if toRemove:
-        for symbol in toRemove:
-            positions.pop(symbol)
-        with open(positionsFile, 'w', encoding='utf-8') as f:
-            json.dump(positions, f, indent=2, default=str)
-    # Eliminado el log innecesario
+        messages(f"[SYNC] Error during position synchronization: {e}", console=1, log=1, telegram=1)
 
 import json
 import time
