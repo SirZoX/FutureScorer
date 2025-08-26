@@ -203,14 +203,14 @@ def printPositionsTable():
         symbol = fmtSymbol(pos.get('symbol', ''))
         openPrice = float(pos.get('openPrice', 0))
         amount = float(pos.get('amount', 0))
-        # Use the latest TP/SL if present, else fallback to tp1/sl1
+        # Use the latest TP/SL if present, else fallback to tpPrice/slPrice
         tpPrice = (
             float(pos.get('tp2')) if pos.get('tp2') not in (None, 0, '', 'null') else
-            float(pos.get('tp1', 0))
+            float(pos.get('tpPrice', 0))
         )
         slPrice = (
             float(pos.get('sl2')) if pos.get('sl2') not in (None, 0, '', 'null') else
-            float(pos.get('sl1', 0))
+            float(pos.get('slPrice', 0))
         )
         invest = openPrice * amount
         investStr = fmtNum(invest, 6, 6)
@@ -223,11 +223,11 @@ def printPositionsTable():
         # Get TP/SL percent from JSON (show the latest if present)
         tpPercent = (
             float(pos.get('tpPercent2')) if pos.get('tpPercent2') not in (None, 0, '', 'null') else
-            float(pos.get('tpPercent', None))
+            float(pos.get('tpPercent', 0))
         )
         slPercent = (
             float(pos.get('slPercent2')) if pos.get('slPercent2') not in (None, 0, '', 'null') else
-            float(pos.get('slPercent', None))
+            float(pos.get('slPercent', 0))
         )
         tpPercentStr = colorText(fmtNum(tpPercent, 2, 2) if tpPercent is not None else '--', 'green')
         slPercentStr = colorText(fmtNum(slPercent, 2, 2) if slPercent is not None else '--', 'red')
