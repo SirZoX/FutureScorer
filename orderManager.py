@@ -275,10 +275,12 @@ class OrderManager:
                     continue
 
             close_reason = None
-            if tpStatus in ('filled', 'canceled', 'closed'):
+            if tpStatus == 'filled':
                 close_reason = 'TP' 
-            elif slStatus in ('filled', 'canceled', 'closed'):
+            elif slStatus == 'filled':
                 close_reason = 'SL'
+            
+            messages(f"[DEBUG] {symbol} close_reason determined: {close_reason} (tpStatus={tpStatus}, slStatus={slStatus})", pair=symbol, console=0, log=1, telegram=0)
 
             if not close_reason:
                 continue
