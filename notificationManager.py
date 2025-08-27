@@ -15,13 +15,8 @@ def notifyPositionClosure(symbol, closeReason, netProfitUsdt, profitPct, totalFe
     # Determine emoji based on profit/loss
     icon = "💰💰" if netProfitUsdt > 0 else "☠️☠️"
     
-    # Format the main notification message
-    if closeReason in ['TP', 'SL']:
-        # Specific TP/SL closure
-        mainMessage = f"{icon} {closeReason} for {symbol} — P/L: {netProfitUsdt:.4f} USDT ({profitPct:.2f}%) [Fees: {totalFees:.4f}]"
-    else:
-        # Generic closure (SYNC, manual, etc.)
-        mainMessage = f"{icon} Position closed: {symbol} — P/L: {netProfitUsdt:.4f} USDT ({profitPct:.2f}%) [Fees: {totalFees:.4f}]"
+    # Format the main notification message - unified format for all closures
+    mainMessage = f"{icon} {symbol}\nP/L: {netProfitUsdt:.4f} USDT ({profitPct:.2f}%) [Fees: {totalFees:.4f}]"
     
     # Send main notification
     messages(mainMessage, pair=symbol, console=1, log=1, telegram=1)
