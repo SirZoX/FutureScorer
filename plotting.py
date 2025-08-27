@@ -8,9 +8,8 @@ import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
 from datetime import datetime
 import os
-from logManager import logInfo
 import gvars
-from logManager import messages # log_info, log_error
+from logManager import messages
 
 
 def savePlot(item):
@@ -173,7 +172,7 @@ def savePlot(item):
     minTouches = 3
     
     # Debug logging
-    logInfo(f"DEBUG PLOTTING - Symbol: {item.get('symbol', 'N/A')}, touchCount: {touchCount}, minTouches: {minTouches}, touchesOk: {touchCount >= minTouches}")
+    messages(f"DEBUG PLOTTING - Symbol: {item.get('symbol', 'N/A')}, touchCount: {touchCount}, minTouches: {minTouches}, touchesOk: {touchCount >= minTouches}", console=0, log=1, telegram=0)
     # Para soporte: slope positivo, para resistencia: negativo
     isLong = item.get('type', 'long') == 'long'
     slopeOk = slope > 0 if isLong else slope < 0
