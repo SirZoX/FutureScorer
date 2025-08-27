@@ -191,11 +191,17 @@ class OrderManager:
                     openTime = position.get('open_ts_unix', currentTime)
                     timeSinceOpen = currentTime - openTime
                     
+                    # Skip if already notified to avoid duplicate notifications
+                    if position.get('notified', False):
+                        messages(f"[DEBUG] Position {symbol} already notified, skipping notification", console=0, log=1, telegram=0)
+                        symbolsToRemove.append(symbol)
+                        continue
+                    
                     # Check for closing trades to confirm the position is actually closed
                     hasClosingTrade = self.checkForClosingTrade(symbol)
                     
                     if hasClosingTrade:
-                        # Only remove if we have confirmed closing trades
+                        # Only remove if we have confirmed closing trades and not yet notified
                         symbolsToRemove.append(symbol)
                         symbolsToNotify.append(symbol)
                         messages(f"[DEBUG] Position {symbol} confirmed closed via trades, safe to remove", console=0, log=1, telegram=0)
@@ -467,14 +473,21 @@ class OrderManager:
         Sincroniza el estado con el exchange y elimina solo el nodo del símbolo cerrado.
         """
         #messages("Analyzing positions", console=1, log=1, telegram=0)
-        # Cargar siempre desde disco para evitar inconsistencias
-        self.positions = self.loadPositions()
+        # Cargar desde disco solo si el dict está vacío o no se ha cargado
+        if not hasattr(self, '_positions_loaded') or not self.positions:
+            self.positions = self.loadPositions()
+            self._positions_loaded = True
         
         # First, clean positions that are no longer open on the exchange
         self.cleanClosedPositions()
         
         symbols_to_remove = []
         for symbol, position in self.positions.items():
+            # Skip if already notified to prevent duplicate notifications
+            if position.get('notified', False):
+                symbols_to_remove.append(symbol)
+                continue
+                
             buyQuantity  = float(position.get('amount', 0))
             buyPrice     = float(position.get('openPrice', 0))
             tsOpenIso    = position.get('timestamp')  # ISO string
@@ -610,17 +623,23 @@ class OrderManager:
             profitPct    = ((avgExitPrice / buyPrice - 1) * 100) if buyPrice else 0
             
             # Calculate profit in USDT for futures with leverage
-            # For futures: profit = investment * (price_change_%) * leverage / 100
-            investmentUsdt = buyQuantity * buyPrice  # This is the notional value
-            leverage = float(position.get('leverage', 1))  # Get leverage from position or default to 1
+            # Get the actual investment and leverage from the position
+            actualInvestmentUsdt = float(position.get('investment_usdt', 0))
+            leverage = float(position.get('leverage', 10))
             
-            # For futures, the actual profit in USDT should be based on the investment amount and leverage
-            # profitQuote = totalCost - (buyQuantity * buyPrice)  # Simple: sell_value - buy_value
-            grossProfitQuote = totalCost - investmentUsdt  # Gross profit in USDT
+            # If investment_usdt is not available (old positions), estimate it
+            if not actualInvestmentUsdt:
+                # For old positions, estimate: notional_value / leverage
+                notionalValue = buyQuantity * buyPrice
+                actualInvestmentUsdt = notionalValue / leverage
+            
+            # For futures: profit = investment × (price_change_%) × leverage
+            priceChangePct = profitPct / 100  # Convert percentage to decimal
+            grossProfitQuote = actualInvestmentUsdt * priceChangePct * leverage
             
             # Get buy fees from position opening (estimate based on investment and typical fee rate)
             # For BingX futures, typical fee is 0.05% (0.0005)
-            estimatedBuyFees = investmentUsdt * 0.0005  # Estimate buy fees
+            estimatedBuyFees = actualInvestmentUsdt * 0.0005  # Estimate buy fees
             totalFeesComplete = totalFees + estimatedBuyFees  # Total fees (buy + sell)
             
             # Net profit after all fees
@@ -633,7 +652,7 @@ class OrderManager:
                 'buyPrice': buyPrice,
                 'avgExitPrice': avgExitPrice,
                 'quantity': totalQuantity,
-                'investmentUsdt': investmentUsdt,
+                'investmentUsdt': actualInvestmentUsdt,
                 'totalCost': totalCost,
                 'grossProfit': grossProfitQuote,
                 'totalFees': totalFeesComplete,
@@ -833,7 +852,9 @@ class OrderManager:
             'slope': slope if slope is not None else 0,
             'intercept': intercept if intercept is not None else 0,
             'tpPercent': float(tpPct) * 100,
-            'slPercent': float(slPct) * 100
+            'slPercent': float(slPct) * 100,
+            'leverage': leverage,
+            'investment_usdt': investUSDC
         }
         self.positions[symbol] = record
         self.savePositions()
@@ -988,9 +1009,18 @@ class OrderManager:
                 avgSellPrice = totalSellValue / totalSellAmount if totalSellAmount > 0 else 0
                 
                 # Calculate gross P/L for futures contracts
-                # For futures: P/L = (Exit_Price - Entry_Price) × Amount
-                # Not total values like spot trading
-                grossProfitQuote = (avgSellPrice - avgBuyPrice) * totalSellAmount
+                # For futures: P/L = (Exit_Price - Entry_Price) × Amount ÷ Leverage
+                # The correct calculation for futures considers the actual investment amount
+                
+                # Get the original position investment amount (if available)
+                originalInvestmentUsdt = position.get('investment_usdt') or (amount * avgBuyPrice / 10)  # Default leverage 10
+                leverage = position.get('leverage', 10)  # Get leverage from position or default to 10
+                
+                # Calculate P/L percentage
+                priceChangePct = ((avgSellPrice - avgBuyPrice) / avgBuyPrice) if avgBuyPrice > 0 else 0
+                
+                # For futures, the actual profit in USDT = investment × price_change_% × leverage
+                grossProfitQuote = originalInvestmentUsdt * priceChangePct * leverage
                 
                 # Debug logging for troubleshooting
                 messages(f"[DEBUG] P/L calculation for {symbol}: totalBuyAmount={totalBuyAmount:.6f}, totalBuyValue={totalBuyValue:.6f}, avgBuyPrice={avgBuyPrice:.6f}", pair=symbol, console=0, log=1, telegram=0)
