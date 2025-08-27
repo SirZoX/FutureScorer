@@ -370,9 +370,9 @@ def monitorPositions():
             sleepTime = 60  # Sleep 1 minute if heavily rate limited
             messages(f"[MONITOR] Rate limited, using {sleepTime}s interval (backoff: {int(rateLimitBackoff)}s)", console=0, log=1, telegram=0)
         elif rateLimitBackoff > 60:
-            sleepTime = 30  # Sleep 30 seconds if moderately rate limited
+            sleepTime = 40  # Sleep 40 seconds if moderately rate limited
         else:
-            sleepTime = 10  # Normal 10 second interval
+            sleepTime = 20  # Normal 20 second interval (reduced from 10s to save API calls)
             
         try:
             syncOpenedPositions()  # Sincroniza y limpia el fichero antes de mostrar la tabla
