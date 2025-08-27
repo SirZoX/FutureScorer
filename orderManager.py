@@ -987,8 +987,15 @@ class OrderManager:
                 totalSellValue = sum(float(t.get('amount', 0)) * float(t.get('price', 0)) for t in sellTrades)
                 avgSellPrice = totalSellValue / totalSellAmount if totalSellAmount > 0 else 0
                 
-                # Calculate gross P/L
-                grossProfitQuote = totalSellValue - totalBuyValue
+                # Calculate gross P/L for futures contracts
+                # For futures: P/L = (Exit_Price - Entry_Price) × Amount
+                # Not total values like spot trading
+                grossProfitQuote = (avgSellPrice - avgBuyPrice) * totalSellAmount
+                
+                # Debug logging for troubleshooting
+                messages(f"[DEBUG] P/L calculation for {symbol}: totalBuyAmount={totalBuyAmount:.6f}, totalBuyValue={totalBuyValue:.6f}, avgBuyPrice={avgBuyPrice:.6f}", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] P/L calculation for {symbol}: totalSellAmount={totalSellAmount:.6f}, totalSellValue={totalSellValue:.6f}, avgSellPrice={avgSellPrice:.6f}", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] P/L calculation for {symbol}: grossProfitQuote=(avgSellPrice-avgBuyPrice)*totalSellAmount=({avgSellPrice:.6f}-{avgBuyPrice:.6f})*{totalSellAmount:.6f}={grossProfitQuote:.6f}", pair=symbol, console=0, log=1, telegram=0)
                 
                 # Calculate fees (assume same fee rate for buy and sell, multiply by 2)
                 # Get fee from the most recent trade (buy or sell)

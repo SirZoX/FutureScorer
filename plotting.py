@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
 from datetime import datetime
 import os
+from logManager import logInfo
 import gvars
 from logManager import messages # log_info, log_error
 
@@ -93,15 +94,20 @@ def savePlot(item):
     minPctBounceAllowed = item.get('minPctBounceAllowed')
     maxPctBounceAllowed = item.get('maxPctBounceAllowed')
     
-    # Determine the start point for horizontal lines
+    # Determine the start point for horizontal lines (3 candles before bounce)
     if bounceIdx is not None:
-        # Start from bounce point
-        lineStartTime = df['timestampNum'].iat[bounceIdx]
+        # Start from 3 candles before bounce point (or from start if not enough candles)
+        startIdx = max(0, bounceIdx - 3)
+        lineStartTime = df['timestampNum'].iat[startIdx]
     else:
-        # If no bounce detected, start from second to last candle
-        lineStartTime = df['timestampNum'].iat[-2] if n >= 2 else df['timestampNum'].iat[0]
+        # If no bounce detected, start from 3 candles before last
+        startIdx = max(0, n - 4) if n >= 4 else 0
+        lineStartTime = df['timestampNum'].iat[startIdx]
     
-    lineEndTime = df['timestampNum'].iat[-1]
+    # Extend lines 5 candles into the future (simulate 5 future candles)
+    lastTime = df['timestampNum'].iat[-1]
+    candleInterval = df['timestampNum'].iat[-1] - df['timestampNum'].iat[-2] if n >= 2 else 1/24/4  # Default 15min if can't calculate
+    lineEndTime = lastTime + (candleInterval * 5)  # Extend 5 candles into future
     lineTimeRange = (lineStartTime, lineEndTime)
     
     # English comment: Use new bounce fields for plot labels
@@ -163,8 +169,11 @@ def savePlot(item):
     def ko(val): return '\u2718 KO'  # ✗
     # Criterios principales
     slope = item.get('slope', 0)
-    touchCount = item.get('touchCount', 0)
+    touchCount = item.get('touchesCount', item.get('touchCount', 0))  # Check both possible field names
     minTouches = 3
+    
+    # Debug logging
+    logInfo(f"DEBUG PLOTTING - Symbol: {item.get('symbol', 'N/A')}, touchCount: {touchCount}, minTouches: {minTouches}, touchesOk: {touchCount >= minTouches}")
     # Para soporte: slope positivo, para resistencia: negativo
     isLong = item.get('type', 'long') == 'long'
     slopeOk = slope > 0 if isLong else slope < 0
