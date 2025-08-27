@@ -4,6 +4,7 @@ import json
 import os
 import csv
 import time
+from datetime import datetime
 
 from logManager import messages
 from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
@@ -348,6 +349,114 @@ class OrderManager:
         else:
             messages(f"[ERROR] No se encontró la línea con id={orderIdentifier} para actualizar cierre en selectionLog.csv", console=1, log=1, telegram=1)
 
+    def logTrade(self, symbol: str, openDate: str, closeDate: str, elapsed: str, investmentUsdt: float, leverage: int, netProfitUsdt: float):
+        """
+        Log a completed trade to trades.csv
+        """
+        try:
+            import os
+            
+            tradesFile = os.path.join(os.path.dirname(__file__), '_files', 'logs', 'trades.csv')
+            
+            # Prepare the trade record
+            tradeRecord = {
+                'symbol': symbol,
+                'open_date': openDate,
+                'close_date': closeDate,
+                'elapsed': elapsed,
+                'investment_usdt': f"{investmentUsdt:.4f}",
+                'leverage': str(leverage),
+                'net_profit_usdt': f"{netProfitUsdt:.4f}"
+            }
+            
+            # Check if file exists and has header
+            fileExists = os.path.exists(tradesFile)
+            
+            # Append the trade record
+            with open(tradesFile, 'a', encoding='utf-8', newline='') as f:
+                fieldnames = ['symbol', 'open_date', 'close_date', 'elapsed', 'investment_usdt', 'leverage', 'net_profit_usdt']
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=';')
+                
+                # Write header if file is new or empty
+                if not fileExists or os.path.getsize(tradesFile) == 0:
+                    writer.writeheader()
+                
+                writer.writerow(tradeRecord)
+            
+            messages(f"[DEBUG] Trade logged: {symbol} P/L={netProfitUsdt:.4f} USDT", pair=symbol, console=0, log=1, telegram=0)
+            
+        except Exception as e:
+            messages(f"[ERROR] Failed to log trade for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+
+    def logTradeFromPosition(self, symbol: str, position: dict, closeReason: str, netProfitUsdt: float):
+        """
+        Extract trade data from position and log it to trades.csv
+        """
+        try:
+            # Extract position data
+            openDateIso = position.get('timestamp', '')  # Format: "2025-08-26 16-30-59"
+            openPrice = float(position.get('openPrice', 0))
+            amount = float(position.get('amount', 0))
+            
+            # Calculate investment (amount * price / leverage)
+            # Assuming leverage 10 (could be extracted from position if stored)
+            leverage = 10  # Default, could be made configurable
+            investmentUsdt = (amount * openPrice) / leverage
+            
+            # Format dates
+            if openDateIso:
+                try:
+                    # Convert from "2025-08-26 16-30-59" format to proper format
+                    openDateFormatted = openDateIso.replace('-', ':', 2).replace('-', '/')
+                    openDateObj = datetime.strptime(openDateFormatted, '%Y/%m/%d %H:%M:%S')
+                    openDateHuman = openDateObj.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    openDateHuman = openDateIso
+            else:
+                openDateHuman = "Unknown"
+            
+            # Current time as close date
+            closeDateHuman = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Calculate elapsed time
+            try:
+                if openDateIso:
+                    openDateFormatted = openDateIso.replace('-', ':', 2).replace('-', '/')
+                    openDateObj = datetime.strptime(openDateFormatted, '%Y/%m/%d %H:%M:%S')
+                    closeeDateObj = datetime.now()
+                    elapsed = closeeDateObj - openDateObj
+                    
+                    # Format elapsed time as human readable
+                    totalSeconds = int(elapsed.total_seconds())
+                    hours = totalSeconds // 3600
+                    minutes = (totalSeconds % 3600) // 60
+                    seconds = totalSeconds % 60
+                    
+                    if hours > 0:
+                        elapsedHuman = f"{hours}h {minutes}m {seconds}s"
+                    elif minutes > 0:
+                        elapsedHuman = f"{minutes}m {seconds}s"
+                    else:
+                        elapsedHuman = f"{seconds}s"
+                else:
+                    elapsedHuman = "Unknown"
+            except:
+                elapsedHuman = "Unknown"
+            
+            # Log the trade
+            self.logTrade(
+                symbol=symbol,
+                openDate=openDateHuman,
+                closeDate=closeDateHuman,
+                elapsed=elapsedHuman,
+                investmentUsdt=investmentUsdt,
+                leverage=leverage,
+                netProfitUsdt=netProfitUsdt
+            )
+            
+        except Exception as e:
+            messages(f"[ERROR] Failed to extract trade data for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+
 
 
 
@@ -505,6 +614,10 @@ class OrderManager:
                 # recordId = f"{tpOrderId or ''}-{slOrderId or ''}"
                 recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
                 self.annotateSelectionLog(recordId, profitQuote, profitPct, tsOpenIso)
+                
+                # Log the trade to trades.csv
+                self.logTradeFromPosition(symbol, position, close_reason, profitQuote)
+                
                 position['notified'] = True
                 # Marcar para eliminar del dict
                 symbols_to_remove.append(symbol)
@@ -877,6 +990,9 @@ class OrderManager:
                 
                 messages(f"[DEBUG] {symbol} P/L calculation: Gross={grossProfitQuote:.4f}, Fees={totalFees:.4f}, Net={netProfitQuote:.4f}, Buy={avgBuyPrice:.6f}, Sell={avgSellPrice:.6f}", 
                         pair=symbol, console=0, log=1, telegram=0)
+                
+                # Log the trade to trades.csv
+                self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
                 
             except Exception as trade_error:
                 messages(f"[ERROR] Could not calculate P/L for {symbol}: {trade_error}", pair=symbol, console=0, log=1, telegram=0)
