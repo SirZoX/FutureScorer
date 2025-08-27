@@ -19,5 +19,7 @@
 - All the imports must be written on the start of the file, never inside functions or encapsulated. Then on the code call the var or function imported
 - NEVER create .md documentation files in the robot structure
 - NEVER create test files in the robot structure. Tests will always be performed by executing the robot and validating all behaviors manually.
+- Make always a single sentence with git add, git commit and git push
+- After the git commands, never show a explanation of the changes
 
 You may copy this file to any project to enforce these universal AI coding standards.

@@ -167,7 +167,7 @@ def getCurrentPrices(symbols):
     return {s: None for s in symbols}
 
 def printPositionsTable():
-    import ccxt
+    from connector import bingxConnector
     path = os.path.join(os.path.dirname(__file__), '_files', 'config', 'openedPositions.json')
     if not os.path.isfile(path):
         print("No openedPositions.json found.")
@@ -181,7 +181,7 @@ def printPositionsTable():
     # Fetch tickers in parallel (max 10 threads)
     import concurrent.futures
     try:
-        exchange = ccxt.binance()
+        exchange = bingxConnector()
         def fetchTicker(symbol):
             try:
                 return symbol, exchange.fetch_ticker(symbol)
