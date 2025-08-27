@@ -1,3 +1,63 @@
+import json
+import time
+from datetime import datetime, timedelta
+import os
+import sys
+import threading
+import re
+
+# Global variables for rate limiting
+lastApiCall = 0
+apiCallInterval = 1.0  # Minimum 1 second between API calls
+rateLimitBackoff = 60  # Start with 60 seconds backoff when rate limited
+
+def checkRateLimit(errorMsg):
+    """
+    Check if error is rate limit related and extract backoff time
+    Returns (isRateLimit, backoffTime)
+    """
+    if not errorMsg:
+        return False, 0
+    
+    # Check for BingX rate limit error code
+    if "100410" in str(errorMsg) or "frequency limit" in str(errorMsg).lower():
+        # Try to extract unblock timestamp from error message
+        match = re.search(r'unblocked after (\d+)', str(errorMsg))
+        if match:
+            unblockTimestamp = int(match.group(1)) / 1000  # Convert to seconds
+            currentTimestamp = time.time()
+            backoffTime = max(unblockTimestamp - currentTimestamp, 30)  # At least 30 seconds
+            return True, min(backoffTime, 300)  # Cap at 5 minutes
+        return True, rateLimitBackoff
+    
+    return False, 0
+
+def safeApiCall(func, *args, **kwargs):
+    """
+    Execute API call with rate limiting and error handling
+    """
+    global lastApiCall, rateLimitBackoff
+    
+    # Ensure minimum time between API calls
+    now = time.time()
+    elapsed = now - lastApiCall
+    if elapsed < apiCallInterval:
+        time.sleep(apiCallInterval - elapsed)
+    
+    try:
+        result = func(*args, **kwargs)
+        lastApiCall = time.time()
+        # Reset backoff on successful call
+        rateLimitBackoff = 60
+        return result, None
+    except Exception as e:
+        lastApiCall = time.time()
+        isRateLimit, backoffTime = checkRateLimit(str(e))
+        if isRateLimit:
+            rateLimitBackoff = backoffTime
+            return None, f"Rate limit hit, backing off for {int(backoffTime)}s"
+        return None, str(e)
+
 def manageDynamicTpSl():
     """
     Monitors all open positions and manages dynamic TP/SL logic:
@@ -11,17 +71,22 @@ def manageDynamicTpSl():
     from logManager import messages # log_info, log_error
     from logManager import messages  # Para mantener compatibilidad temporal
     from gvars import positionsFile, configFile
+    
+    global rateLimitBackoff
+    
+    # Check if we're in a rate limit backoff period
+    if rateLimitBackoff > 60:
+        return  # Skip this cycle if we're heavily rate limited
+    
     try:
         with open(positionsFile, encoding='utf-8') as f:
             positions = json.load(f)
     except Exception as e:
         messages(f"[DYN-TP/SL] Error loading positions: {e}", console=1, log=1, telegram=1)
-        messages(f"[DYN-TP/SL] Error loading positions: {e}", console=1, log=1, telegram=1)
         return
     try:
         config = configManager.config
     except Exception as e:
-        messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         messages(f"[DYN-TP/SL] Error loading config: {e}", console=1, log=1, telegram=1)
         return
     exchange = bingxConnector()
@@ -35,8 +100,17 @@ def manageDynamicTpSl():
             slOrderId1 = pos.get('slOrderId1')
             tpOrderId2 = pos.get('tpOrderId2')
             slOrderId2 = pos.get('slOrderId2')
-            # Fetch current price
-            ticker = exchange.fetch_ticker(symbol)
+            
+            # Fetch current price with rate limiting
+            ticker, error = safeApiCall(exchange.fetch_ticker, symbol)
+            if error:
+                if "Rate limit" in error:
+                    messages(f"[DYN-TP/SL] Rate limit for {symbol}, skipping this cycle", console=0, log=1, telegram=0)
+                    return  # Exit function to avoid more rate limit errors
+                else:
+                    messages(f"[DYN-TP/SL] Error fetching ticker for {symbol}: {error}", console=0, log=1, telegram=0)
+                continue
+                
             currentPrice = float(ticker.get('last') or ticker.get('close') or 0)
             # Calculate progress to TP1
             if tp1 == openPrice:
@@ -50,19 +124,37 @@ def manageDynamicTpSl():
                 # Cancel current OCO
                 try:
                     if tpOrderId1:
-                        exchange.cancel_order(tpOrderId1, symbol)
+                        _, error = safeApiCall(exchange.cancel_order, tpOrderId1, symbol)
+                        if error and "Rate limit" in error:
+                            messages(f"[DYN-TP/SL] Rate limit hit while cancelling TP order for {symbol}, skipping", console=0, log=1, telegram=0)
+                            return
                     if slOrderId1:
-                        exchange.cancel_order(slOrderId1, symbol)
+                        _, error = safeApiCall(exchange.cancel_order, slOrderId1, symbol)
+                        if error and "Rate limit" in error:
+                            messages(f"[DYN-TP/SL] Rate limit hit while cancelling SL order for {symbol}, skipping", console=0, log=1, telegram=0)
+                            return
                     messages(f"[DYN-TP/SL] Cancelled OCO for {symbol} at 75% to TP1", console=1, log=1, telegram=0)
                 except Exception as e:
-                    messages(f"[DYN-TP/SL] Error cancelling OCO for {symbol}: {e}", console=1, log=1, telegram=1)
+                    isRateLimit, _ = checkRateLimit(str(e))
+                    if isRateLimit:
+                        messages(f"[DYN-TP/SL] Rate limit while cancelling OCO for {symbol}, skipping", console=0, log=1, telegram=0)
+                        return
+                    else:
+                        messages(f"[DYN-TP/SL] Error cancelling OCO for {symbol}: {e}", console=0, log=1, telegram=0)
                     continue
                 # Place new OCO with TP2
                 amount = float(pos.get('amount', 0))
                 sl2 = sl1  # For now, keep SL2 same as SL1
                 try:
                     # Calculate tickSize if needed (not implemented here)
-                    order = exchange.create_order(symbol, 'OCO', 'sell', amount, tp2, {'stopPrice': sl2})
+                    order, error = safeApiCall(exchange.create_order, symbol, 'OCO', 'sell', amount, tp2, {'stopPrice': sl2})
+                    if error:
+                        if "Rate limit" in error:
+                            messages(f"[DYN-TP/SL] Rate limit while placing OCO TP2 for {symbol}, skipping", console=0, log=1, telegram=0)
+                            return
+                        else:
+                            messages(f"[DYN-TP/SL] Error placing OCO TP2 for {symbol}: {error}", console=0, log=1, telegram=0)
+                        continue
                     tpOrderId2 = order.get('id')
                     slOrderId2 = order.get('params', {}).get('stopOrderId')
                     pos['tp2'] = tp2
@@ -71,10 +163,20 @@ def manageDynamicTpSl():
                     pos['slOrderId2'] = slOrderId2
                     messages(f"[DYN-TP/SL] Nueva OCO TP2 para {symbol}: TP2={tp2}, SL2={sl2}", console=1, log=1, telegram=1)
                 except Exception as e:
-                    messages(f"[DYN-TP/SL] Error placing OCO TP2 for {symbol}: {e}", console=1, log=1, telegram=1)
+                    isRateLimit, _ = checkRateLimit(str(e))
+                    if isRateLimit:
+                        messages(f"[DYN-TP/SL] Rate limit while placing OCO TP2 for {symbol}, skipping", console=0, log=1, telegram=0)
+                        return
+                    else:
+                        messages(f"[DYN-TP/SL] Error placing OCO TP2 for {symbol}: {e}", console=0, log=1, telegram=0)
                     continue
         except Exception as e:
-            messages(f"[DYN-TP/SL] Error in dynamic TP/SL for {symbol}: {e}", console=1, log=1, telegram=1)
+            isRateLimit, _ = checkRateLimit(str(e))
+            if isRateLimit:
+                messages(f"[DYN-TP/SL] Rate limit hit for {symbol}, stopping dynamic TP/SL for this cycle", console=0, log=1, telegram=0)
+                return  # Exit completely to avoid more rate limit errors
+            else:
+                messages(f"[DYN-TP/SL] Error in dynamic TP/SL for {symbol}: {e}", console=0, log=1, telegram=0)
     # Save updated positions
     try:
         with open(positionsFile, 'w', encoding='utf-8') as f:
@@ -88,7 +190,6 @@ def syncOpenedPositions():
     """
     from orderManager import OrderManager
     from logManager import messages
-    import json
     from gvars import positionsFile
     
     try:
@@ -109,13 +210,6 @@ def syncOpenedPositions():
         messages("[SYNC] Position synchronization completed", console=0, log=1, telegram=0)
     except Exception as e:
         messages(f"[SYNC] Error during position synchronization: {e}", console=1, log=1, telegram=1)
-
-import json
-import time
-from datetime import datetime, timedelta
-import os
-import sys
-import threading
 
 # Global event to control monitor execution
 monitorActive = threading.Event()
@@ -178,22 +272,30 @@ def printPositionsTable():
         return
     now = int(time.time())
     symbols = [pos.get('symbol', '') for pos in positions.values()]
-    # Fetch tickers in parallel (max 10 threads)
-    import concurrent.futures
-    try:
-        exchange = bingxConnector()
-        def fetchTicker(symbol):
-            try:
-                return symbol, exchange.fetch_ticker(symbol)
-            except Exception:
-                return symbol, {}
+    
+    global rateLimitBackoff
+    
+    # Check if we're in heavy rate limit backoff
+    if rateLimitBackoff > 120:  # If backoff is more than 2 minutes, use cached prices
         tickers = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            results = executor.map(fetchTicker, symbols)
-            for symbol, ticker in results:
-                tickers[symbol] = ticker
-    except Exception:
-        tickers = {}
+    else:
+        # Fetch tickers with rate limiting (no parallel execution to avoid rate limits)
+        try:
+            exchange = bingxConnector()
+            tickers = {}
+            for symbol in symbols:
+                ticker, error = safeApiCall(exchange.fetch_ticker, symbol)
+                if error:
+                    if "Rate limit" in error:
+                        # If we hit rate limit, stop fetching more tickers and use open price
+                        break
+                    tickers[symbol] = {}
+                else:
+                    tickers[symbol] = ticker
+                # Small delay between ticker requests
+                time.sleep(0.2)
+        except Exception:
+            tickers = {}
     header = f"{'Hora':19} | {'Par':18} | {'TP':>5} | {'SL':>5} | {'%':>9} | {'Inversión':>14} | {'Entrada':>10} | {'TP':>10} | {'SL':>10} | {'Abierta':>12}"
     print()
     print('-'*len(header))
@@ -258,17 +360,41 @@ def printPositionsTable():
 
 def monitorPositions():
     from logManager import messages
+    global rateLimitBackoff
+    
     while True:
         monitorActive.wait()  # Wait until monitor is enabled
+        
+        # Dynamic sleep based on rate limit status
+        if rateLimitBackoff > 120:
+            sleepTime = 60  # Sleep 1 minute if heavily rate limited
+            messages(f"[MONITOR] Rate limited, using {sleepTime}s interval (backoff: {int(rateLimitBackoff)}s)", console=0, log=1, telegram=0)
+        elif rateLimitBackoff > 60:
+            sleepTime = 30  # Sleep 30 seconds if moderately rate limited
+        else:
+            sleepTime = 10  # Normal 10 second interval
+            
         try:
             syncOpenedPositions()  # Sincroniza y limpia el fichero antes de mostrar la tabla
         except Exception as e:
             messages(f"[SYNC] Error ejecutando syncOpenedPositions: {e}", console=1, log=1, telegram=1)
+        
         printPositionsTable()
+        
         try:
             manageDynamicTpSl()
         except Exception as e:
-            messages(f"[DYN-TP/SL] Error en manageDynamicTpSl: {e}", console=1, log=1, telegram=1)
-        time.sleep(10)
+            isRateLimit, backoffTime = checkRateLimit(str(e))
+            if isRateLimit:
+                messages(f"[DYN-TP/SL] Rate limit detected, backing off for {int(backoffTime)}s", console=0, log=1, telegram=0)
+                rateLimitBackoff = backoffTime
+            else:
+                messages(f"[DYN-TP/SL] Error en manageDynamicTpSl: {e}", console=0, log=1, telegram=0)
+        
+        # Decay rate limit backoff over time
+        if rateLimitBackoff > 60:
+            rateLimitBackoff = max(60, rateLimitBackoff * 0.9)
+            
+        time.sleep(sleepTime)
 if __name__ == '__main__':
     monitorPositions()
