@@ -588,26 +588,50 @@ class OrderManager:
 
             totalQuantity = 0.0
             totalCost     = 0.0
+            totalFees     = 0.0
             for trade in relevantTrades:
                 amt  = float(trade.get('amount', 0))
                 cost = float(trade.get('cost',   0))
+                fee  = float(trade.get('fee', {}).get('cost', 0))
                 if totalQuantity + amt > buyQuantity:
                     needed       = buyQuantity - totalQuantity
-                    totalCost   += cost * (needed / amt)
+                    proportionalCost = cost * (needed / amt)
+                    proportionalFee = fee * (needed / amt)
+                    totalCost   += proportionalCost
+                    totalFees   += proportionalFee
                     totalQuantity = buyQuantity
                     break
                 totalQuantity += amt
                 totalCost     += cost
+                totalFees     += fee
 
             avgExitPrice = totalCost / totalQuantity if totalQuantity else 0
-            profitQuote  = totalQuantity * (avgExitPrice - buyPrice)
             profitPct    = ((avgExitPrice / buyPrice - 1) * 100) if buyPrice else 0
-
+            
+            # Calculate profit in USDT for futures with leverage
+            # For futures: profit = investment * (price_change_%) * leverage / 100
+            investmentUsdt = buyQuantity * buyPrice  # This is the notional value
+            leverage = float(position.get('leverage', 1))  # Get leverage from position or default to 1
+            
+            # For futures, the actual profit in USDT should be based on the investment amount and leverage
+            # profitQuote = totalCost - (buyQuantity * buyPrice)  # Simple: sell_value - buy_value
+            grossProfitQuote = totalCost - investmentUsdt  # Gross profit in USDT
+            
+            # Get buy fees from position opening (estimate based on investment and typical fee rate)
+            # For BingX futures, typical fee is 0.05% (0.0005)
+            estimatedBuyFees = investmentUsdt * 0.0005  # Estimate buy fees
+            totalFeesComplete = totalFees + estimatedBuyFees  # Total fees (buy + sell)
+            
+            # Net profit after all fees
+            profitQuote = grossProfitQuote - totalFeesComplete
+            
+            # Alternative calculation (should give same result): profitQuote = investmentUsdt * (profitPct / 100)
+            
             icon = "💰💰" if profitQuote > 0 else "☠️☠️"
-            messages(f"[DEBUG] Closing position: {symbol} reason={close_reason} P/L={profitQuote:.4f} USDC ({profitPct:.2f}%)", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[DEBUG] Closing position: {symbol} reason={close_reason} buyPrice={buyPrice:.6f} avgExitPrice={avgExitPrice:.6f} quantity={totalQuantity:.6f} investmentUsdt={investmentUsdt:.4f} totalCost={totalCost:.4f} grossProfit={grossProfitQuote:.4f} totalFees={totalFeesComplete:.4f} netP/L={profitQuote:.4f} USDT ({profitPct:.2f}%)", pair=symbol, console=0, log=1, telegram=0)
             try:
                 messages(
-                    f"{icon} {close_reason} for {symbol} — P/L: {profitQuote:.4f} USDC ({profitPct:.2f}%)",
+                    f"{icon} {close_reason} for {symbol} — P/L: {profitQuote:.4f} USDT ({profitPct:.2f}%) [Fees: {totalFeesComplete:.4f}]",
                     pair=symbol, console=1, log=1, telegram=1
                 )
                 # Comentar el uso antiguo y dejar nota
@@ -984,7 +1008,7 @@ class OrderManager:
                 
                 # Send detailed notification
                 messages(
-                    f"{icon} Position closed: {symbol} — P/L: {netProfitQuote:.4f} USDC ({netProfitPct:.2f}%) [Fees: {totalFees:.4f}]",
+                    f"{icon} Position closed: {symbol} — P/L: {netProfitQuote:.4f} USDT ({netProfitPct:.2f}%) [Fees: {totalFees:.4f}]",
                     pair=symbol, console=1, log=1, telegram=1
                 )
                 
