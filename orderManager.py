@@ -14,6 +14,7 @@ from logManager import messages
 from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
 from cacheManager import cachedCall
+from notificationManager import notifyPositionClosure, notifyPositionClosureSimple
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -627,13 +628,24 @@ class OrderManager:
             
             # Alternative calculation (should give same result): profitQuote = investmentUsdt * (profitPct / 100)
             
-            icon = "💰💰" if profitQuote > 0 else "☠️☠️"
-            messages(f"[DEBUG] Closing position: {symbol} reason={close_reason} buyPrice={buyPrice:.6f} avgExitPrice={avgExitPrice:.6f} quantity={totalQuantity:.6f} investmentUsdt={investmentUsdt:.4f} totalCost={totalCost:.4f} grossProfit={grossProfitQuote:.4f} totalFees={totalFeesComplete:.4f} netP/L={profitQuote:.4f} USDT ({profitPct:.2f}%)", pair=symbol, console=0, log=1, telegram=0)
+            # Prepare debug details for unified notification
+            debugDetails = {
+                'buyPrice': buyPrice,
+                'avgExitPrice': avgExitPrice,
+                'quantity': totalQuantity,
+                'investmentUsdt': investmentUsdt,
+                'totalCost': totalCost,
+                'grossProfit': grossProfitQuote,
+                'totalFees': totalFeesComplete,
+                'netProfit': profitQuote,
+                'profitPct': profitPct,
+                'closeReason': close_reason
+            }
+            
             try:
-                messages(
-                    f"{icon} {close_reason} for {symbol} — P/L: {profitQuote:.4f} USDT ({profitPct:.2f}%) [Fees: {totalFeesComplete:.4f}]",
-                    pair=symbol, console=1, log=1, telegram=1
-                )
+                # Use unified notification function
+                notifyPositionClosure(symbol, close_reason, profitQuote, profitPct, totalFeesComplete, debugDetails)
+                
                 # Comentar el uso antiguo y dejar nota
                 # recordId = f"{tpOrderId or ''}-{slOrderId or ''}"
                 recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
@@ -943,10 +955,7 @@ class OrderManager:
             
             if not openPrice or not amount or not openTsUnix:
                 # Fallback to simple notification if data is missing
-                messages(
-                    f"🔔 Position closed: {symbol} (detected via exchange sync)",
-                    pair=symbol, console=1, log=1, telegram=1
-                )
+                notifyPositionClosureSimple(symbol, "detected via exchange sync")
                 position['notified'] = True
                 self.positions[symbol] = position
                 return
@@ -964,10 +973,7 @@ class OrderManager:
                 
                 if not sellTrades:
                     # No sell trades found, fallback to simple notification
-                    messages(
-                        f"🔔 Position closed: {symbol} (detected via exchange sync - no sell trades found)",
-                        pair=symbol, console=1, log=1, telegram=1
-                    )
+                    notifyPositionClosureSimple(symbol, "detected via exchange sync - no sell trades found")
                     position['notified'] = True
                     self.positions[symbol] = position
                     return
@@ -1003,17 +1009,18 @@ class OrderManager:
                 netProfitQuote = grossProfitQuote - totalFees
                 netProfitPct = ((avgSellPrice / avgBuyPrice - 1) * 100) if avgBuyPrice > 0 else 0
                 
-                # Determine icon
-                icon = "💰💰" if netProfitQuote > 0 else "☠️☠️"
+                # Prepare debug details for unified notification
+                debugDetails = {
+                    'grossProfit': grossProfitQuote,
+                    'totalFees': totalFees,
+                    'netProfit': netProfitQuote,
+                    'avgBuyPrice': avgBuyPrice,
+                    'avgSellPrice': avgSellPrice,
+                    'profitPct': netProfitPct
+                }
                 
-                # Send detailed notification
-                messages(
-                    f"{icon} Position closed: {symbol} — P/L: {netProfitQuote:.4f} USDT ({netProfitPct:.2f}%) [Fees: {totalFees:.4f}]",
-                    pair=symbol, console=1, log=1, telegram=1
-                )
-                
-                messages(f"[DEBUG] {symbol} P/L calculation: Gross={grossProfitQuote:.4f}, Fees={totalFees:.4f}, Net={netProfitQuote:.4f}, Buy={avgBuyPrice:.6f}, Sell={avgSellPrice:.6f}", 
-                        pair=symbol, console=0, log=1, telegram=0)
+                # Use unified notification function
+                notifyPositionClosure(symbol, "SYNC", netProfitQuote, netProfitPct, totalFees, debugDetails)
                 
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
@@ -1021,10 +1028,7 @@ class OrderManager:
             except Exception as trade_error:
                 messages(f"[ERROR] Could not calculate P/L for {symbol}: {trade_error}", pair=symbol, console=0, log=1, telegram=0)
                 # Fallback to simple notification
-                messages(
-                    f"🔔 Position closed: {symbol} (detected via exchange sync - P/L calculation failed)",
-                    pair=symbol, console=1, log=1, telegram=1
-                )
+                notifyPositionClosureSimple(symbol, "detected via exchange sync - P/L calculation failed")
             
             # Mark as notified
             position['notified'] = True
