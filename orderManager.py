@@ -249,6 +249,7 @@ class OrderManager:
         """
         Carga las posiciones abiertas desde el JSON como dict {symbol: {...}}.
         Si el archivo está en formato antiguo (lista), lo migra automáticamente.
+        Añade el campo 'side' si no existe.
         """
         try:
             with open(positionsFile, encoding='utf-8') as f:
@@ -256,11 +257,21 @@ class OrderManager:
         except Exception as e:
             messages(f"Error loading positions: {e}", console=1, log=1, telegram=0)
             data = {}
+        
         # Si es lista (formato antiguo), migrar a dict
         if isinstance(data, list):
             migrated = {item['symbol']: item for item in data if 'symbol' in item}
             self.savePositionsDict(migrated)
-            return migrated
+            data = migrated
+        
+        # Ensure all positions have 'side' field
+        if isinstance(data, dict):
+            for symbol, position in data.items():
+                if 'side' not in position:
+                    # Infer side from amount (positive = LONG, negative = SHORT)
+                    amount = position.get('amount', 0)
+                    position['side'] = 'LONG' if amount >= 0 else 'SHORT'
+        
         return data if isinstance(data, dict) else {}
 
     def savePositions(self):
@@ -854,7 +865,8 @@ class OrderManager:
             'tpPercent': float(tpPct) * 100,
             'slPercent': float(slPct) * 100,
             'leverage': leverage,
-            'investment_usdt': investUSDC
+            'investment_usdt': investUSDC,
+            'side': side.upper()  # Add side information (LONG/SHORT)
         }
         self.positions[symbol] = record
         self.savePositions()

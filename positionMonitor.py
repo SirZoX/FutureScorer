@@ -247,7 +247,7 @@ def fmtNum(num, maxInt=5, maxDec=6):
         return f"{parts[0]}.{'0'*maxDec}"
 
 def fmtSymbol(symbol):
-    return symbol.ljust(25)[:25]
+    return symbol.ljust(20)[:20]  # Reduced from 25 to 20 for better fit
 
 def fmtTimeDelta(seconds):
     td = timedelta(seconds=seconds)
@@ -298,13 +298,19 @@ def printPositionsTable():
                 time.sleep(0.2)
         except Exception:
             tickers = {}
-    header = f"{'Hora':19} | {'Par':18} | {'TP':>5} | {'SL':>5} | {'%':>9} | {'Inversión':>14} | {'Entrada':>10} | {'TP':>10} | {'SL':>10} | {'Abierta':>12}"
+    # Updated header with Long/Short column and properly aligned
+    header = f"{'Hora':19} | {'Par':20} | {'L/S':4} | {'TP%':5} | {'SL%':5} | {'P/L%':9} | {'Inversión':12} | {'Entrada':10} | {'TP':10} | {'SL':10} | {'Abierta':12}"
     print()
     print('-'*len(header))
     print(header)
     print('-'*len(header))
     for pos in positions.values():
         symbol = fmtSymbol(pos.get('symbol', ''))
+        
+        # Get position side (default to LONG if not specified)
+        side = pos.get('side', 'LONG')
+        sideStr = 'L' if side.upper() == 'LONG' else 'S'
+        
         openPrice = float(pos.get('openPrice', 0))
         amount = float(pos.get('amount', 0))
         # Use the latest TP/SL if present, else fallback to tpPrice/slPrice
@@ -317,10 +323,10 @@ def printPositionsTable():
             float(pos.get('slPrice', 0))
         )
         invest = openPrice * amount
-        investStr = fmtNum(invest, 6, 6)
-        openPriceStr = fmtNum(openPrice, 6, 6)
-        tpPriceStr = fmtNum(tpPrice, 6, 6)
-        slPriceStr = fmtNum(slPrice, 6, 6)
+        investStr = fmtNum(invest, 5, 4)  # Adjusted for better fit
+        openPriceStr = fmtNum(openPrice, 5, 5)
+        tpPriceStr = fmtNum(tpPrice, 5, 5)
+        slPriceStr = fmtNum(slPrice, 5, 5)
         entryTs = int(pos.get('open_ts_unix', now))
         delta = now - entryTs
         deltaStr = fmtTimeDelta(delta)
@@ -333,13 +339,13 @@ def printPositionsTable():
             float(pos.get('slPercent2')) if pos.get('slPercent2') not in (None, 0, '', 'null') else
             float(pos.get('slPercent', 0))
         )
-        tpPercentStr = colorText(fmtNum(tpPercent, 2, 2) if tpPercent is not None else '--', 'green')
-        slPercentStr = colorText(fmtNum(slPercent, 2, 2) if slPercent is not None else '--', 'red')
+        tpPercentStr = colorText(f"{tpPercent:4.1f}" if tpPercent is not None else ' --', 'green')
+        slPercentStr = colorText(f"{slPercent:4.1f}" if slPercent is not None else ' --', 'red')
         # Get current price from ticker
         ticker = tickers.get(pos.get('symbol', ''), {})
         currentPrice = ticker.get('last', openPrice)
         pct = ((currentPrice - openPrice) / openPrice) * 100 if openPrice else 0
-        pctStr = f"{pct:+.2f} %"  # Always show sign (+/-) for consistent width
+        pctStr = f"{pct:+6.2f}%"  # Always show sign (+/-) for consistent width
         # Color logic for profit-loss percentage
         if pct >= 0:
             pctColor = 'green'
@@ -358,7 +364,7 @@ def printPositionsTable():
             else:
                 pctColor = 'red'
         hora = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-        print(f"{hora:19} | {symbol:18} | {tpPercentStr:>5} | {slPercentStr:>5} | {colorText(pctStr, pctColor):>9} | {investStr:>14} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
+        print(f"{hora:19} | {symbol:20} | {sideStr:4} | {tpPercentStr:>5} | {slPercentStr:>5} | {colorText(pctStr, pctColor):>9} | {investStr:>12} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
 
 def monitorPositions():
     from logManager import messages
