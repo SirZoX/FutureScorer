@@ -270,7 +270,6 @@ def printPositionsTable():
     with open(path, encoding='utf-8') as f:
         positions = json.load(f)
     if not positions:
-        print("No open positions to display.")
         return
     now = int(time.time())
     symbols = [pos.get('symbol', '') for pos in positions.values()]
