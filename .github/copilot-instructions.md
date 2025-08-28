@@ -7,7 +7,7 @@
 - If you find code that does not follow these rules, refactor it to comply.
 - These rules take precedence over any project-specific or default conventions.
 - All the iterations between us must be in spanish, but keep the code comments in English.
-- After a modification, always execute the command `git add .` to stage all changes and then commit with a message that describes the changes made in spanish, and finally add command `git push` to upload the changes
+- After a modification, always execute the command `git add .` to stage all changes and then commit with a message that describes the changes made in spanish, and finally add command `git push` to upload the changes, all in one sentence and without the "cd path"
 - never ask me if I want to apply suggested changes, always apply them directly.
 - when refactoring code, ensure that the logic remains unchanged and that the code is functionally equivalent to the original.
 - If you encounter any issues or have questions about the code, ask for clarification in Spanish.

@@ -201,7 +201,8 @@ def syncOpenedPositions():
             positions = {}
         
         if not positions:
-            # No positions to sync, exit silently
+            # No positions to sync, but don't return - let the monitor continue
+            messages("[SYNC] No positions to synchronize", console=0, log=1, telegram=0)
             return
             
         # Use OrderManager.updatePositions() which handles closing positions and Telegram notifications
@@ -269,6 +270,7 @@ def printPositionsTable():
     with open(path, encoding='utf-8') as f:
         positions = json.load(f)
     if not positions:
+        print("No open positions to display.")
         return
     now = int(time.time())
     symbols = [pos.get('symbol', '') for pos in positions.values()]
