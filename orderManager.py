@@ -200,11 +200,20 @@ class OrderManager:
                     # Check for closing trades to confirm the position is actually closed
                     hasClosingTrade = self.checkForClosingTrade(symbol)
                     
+                    # Also allow cleanup for old positions (more than 24 hours) even without closing trades
+                    # This prevents old positions from staying forever due to API limitations
+                    isOldPosition = timeSinceOpen > 86400  # 24 hours in seconds
+                    
                     if hasClosingTrade:
                         # Only remove if we have confirmed closing trades and not yet notified
                         symbolsToRemove.append(symbol)
                         symbolsToNotify.append(symbol)
                         messages(f"[DEBUG] Position {symbol} confirmed closed via trades, safe to remove", console=0, log=1, telegram=0)
+                    elif isOldPosition:
+                        # Remove old positions that are not on exchange (likely closed but trades not accessible)
+                        symbolsToRemove.append(symbol)
+                        symbolsToNotify.append(symbol)
+                        messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and not on exchange, removing", console=0, log=1, telegram=0)
                     else:
                         messages(f"[DEBUG] Position {symbol} not found on exchange but no closing trades found, keeping for safety", console=0, log=1, telegram=0)
                 
