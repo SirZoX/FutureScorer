@@ -28,6 +28,53 @@ def findPossibleResistancesAndSupports(lows, highs, closes, opens, tolerancePct,
             touchCount = int(touchMask.sum())
             if touchCount < minTouches:
                 continue
+            
+            # Improve line calculation: adjust to pass closer to recent bounce points
+            # Find the most recent touch point in the last 5 candles and use open/close for better accuracy
+            recentTouchIdx = None
+            recentTouchValue = None
+            
+            if slope > 0:  # Support line
+                # For support, look for candles that touch or pierce the line
+                for k in range(max(0, n-5), n):
+                    if lows[k] <= lineExp[k] and np.abs(lows[k] - lineExp[k]) <= np.abs(lineExp[k]) * tolerancePct:
+                        recentTouchIdx = k
+                        # Use the open price of the bounce candle for better line fitting
+                        # If it's a green candle after touching support, use the open (entry point)
+                        if closes[k] > opens[k]:  # Green candle
+                            recentTouchValue = opens[k]
+                        else:
+                            recentTouchValue = lows[k]  # Use low if red candle
+                        break  # Take the first (earliest) touch in recent candles
+            else:  # Resistance line
+                for k in range(max(0, n-5), n):
+                    if highs[k] >= lineExp[k] and np.abs(highs[k] - lineExp[k]) <= np.abs(lineExp[k]) * tolerancePct:
+                        recentTouchIdx = k
+                        # Use the open price of the bounce candle for better line fitting
+                        if closes[k] < opens[k]:  # Red candle
+                            recentTouchValue = opens[k]
+                        else:
+                            recentTouchValue = highs[k]  # Use high if green candle
+                        break
+            
+            # If we found a recent touch, adjust the line to pass through it more precisely
+            if recentTouchIdx is not None and recentTouchIdx != j and recentTouchValue is not None:
+                # Use the original point i and the recent touch point to recalculate
+                y1, y2 = lows[i], recentTouchValue
+                x1, x2 = i, recentTouchIdx
+                
+                # Recalculate slope and intercept with adjusted points
+                if x2 != x1:  # Avoid division by zero
+                    slope = (y2 - y1) / (x2 - x1)
+                    intercept = y1 - slope * x1
+                    lineExp = slope * xIdx + intercept
+                    
+                    # Recalculate touches with adjusted line
+                    if slope > 0:
+                        touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
+                    else:
+                        touchMask = np.abs(highs - lineExp) <= np.abs(lineExp) * tolerancePct
+                    touchCount = int(touchMask.sum())
             # Percentage of candles with close above/below the line
             closesAbove = closes > lineExp
             closesBelow = closes < lineExp
