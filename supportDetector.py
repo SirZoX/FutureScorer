@@ -1,4 +1,4 @@
-def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSeparation, minTouches, closeViolationPct=0.02):
+def findPossibleResistancesAndSupports(lows, highs, closes, opens, tolerancePct, minSeparation, minTouches, closeViolationPct=0.02):
     """
     Detects possible support (long) and resistance (short) lines in a single pass.
     Returns a list of opportunities, each with type ('long' or 'short'), slope, intercept, touchCount, lineExp, bases, and validation flags.
@@ -15,8 +15,16 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
             slope = (y2 - y1) / (x2 - x1)
             intercept = y1 - slope * x1
             lineExp = slope * xIdx + intercept
-            # Touches within tolerance
-            touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
+            
+            # Determine if this is support (positive slope) or resistance (negative slope)
+            # and use appropriate data for touch calculation
+            if slope > 0:
+                # Support line - use lows for touches
+                touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
+            else:
+                # Resistance line - use highs for touches  
+                touchMask = np.abs(highs - lineExp) <= np.abs(lineExp) * tolerancePct
+                
             touchCount = int(touchMask.sum())
             if touchCount < minTouches:
                 continue
@@ -31,8 +39,23 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
                 # Últimas dos velas deben estar por encima de la línea
                 if lows[-1] < lineExp[-1] or lows[-2] < lineExp[-2]:
                     continue
-                # Rebote: dos velas verdes y cierre > línea * (1 + bouncePct)
-                bounce = closes[-1] > opens[-1] and closes[-2] > opens[-2] and closes[-1] > closes[-2] and (closes[-1] - lineExp[-1]) / lineExp[-1] >= bouncePct
+                
+                # New bounce validation: must have support touch + 2 green candles
+                # Check if there's a touch to support line within tolerance in recent candles
+                hasTouchToSupport = False
+                # Check last 3 candles for support touch (including piercing within tolerance)
+                for k in range(max(0, n-3), n):
+                    if (lows[k] <= lineExp[k] and 
+                        abs(lows[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
+                        hasTouchToSupport = True
+                        break
+                
+                # Must have 2 consecutive green candles after the touch
+                hasGreenBounce = (closes[-1] > opens[-1] and closes[-2] > opens[-2])
+                
+                # Combined bounce validation
+                bounce = hasTouchToSupport and hasGreenBounce
+                
                 if ratioAbove > 1 - closeViolationPct and bounce:
                     opportunities.append({
                         'type': 'long',
@@ -44,16 +67,33 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
                         'ratioAbove': ratioAbove,
                         'ratioBelow': ratioBelow,
                         'bounce': bounce,
+                        'hasTouchToSupport': hasTouchToSupport,
+                        'hasGreenBounce': hasGreenBounce,
                         'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
                         'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
                     })
             # Resistencia (short): slope negativo y % de velas por debajo suficiente
             elif slope < 0:
                 # Últimas dos velas deben estar por debajo de la línea
-                if lows[-1] > lineExp[-1] or lows[-2] > lineExp[-2]:
+                if highs[-1] > lineExp[-1] or highs[-2] > lineExp[-2]:
                     continue
-                # Rebote: dos velas rojas y cierre < línea * (1 - bouncePct)
-                bounce = closes[-1] < opens[-1] and closes[-2] < opens[-2] and closes[-1] < closes[-2] and (lineExp[-1] - closes[-1]) / lineExp[-1] >= bouncePct
+                
+                # New bounce validation: must have resistance touch + 2 red candles
+                # Check if there's a touch to resistance line within tolerance in recent candles
+                hasTouchToResistance = False
+                # Check last 3 candles for resistance touch (including piercing within tolerance)
+                for k in range(max(0, n-3), n):
+                    if (highs[k] >= lineExp[k] and 
+                        abs(highs[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
+                        hasTouchToResistance = True
+                        break
+                
+                # Must have 2 consecutive red candles after the touch
+                hasRedBounce = (closes[-1] < opens[-1] and closes[-2] < opens[-2])
+                
+                # Combined bounce validation
+                bounce = hasTouchToResistance and hasRedBounce
+                
                 if ratioBelow > 1 - closeViolationPct and bounce:
                     opportunities.append({
                         'type': 'short',
@@ -65,6 +105,8 @@ def findPossibleResistancesAndSupports(lows, closes, opens, tolerancePct, minSep
                         'ratioAbove': ratioAbove,
                         'ratioBelow': ratioBelow,
                         'bounce': bounce,
+                        'hasTouchToResistance': hasTouchToResistance,
+                        'hasRedBounce': hasRedBounce,
                         'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
                         'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
                     })

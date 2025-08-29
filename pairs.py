@@ -207,6 +207,7 @@ def analyzePairs():
         # Detectar oportunidades long y short
         opps = findPossibleResistancesAndSupports(
             df["low"].values,
+            df["high"].values,
             df["close"].values,
             df["open"].values,
             tolerancePct=tolerancePct,
@@ -216,24 +217,16 @@ def analyzePairs():
         )
         results = []
         for opp in opps:
-            # Validar criterios finales para long y short
+            # The bounce validation is already done in supportDetector.py
+            # We only need to validate the final criteria here
             last, prev, prev2 = len(df)-1, len(df)-2, len(df)-3
             lineExp = opp['lineExp']
-            if opp['type'] == 'long':
-                touchesSupport = abs(df["low"].iat[prev2] - lineExp[prev2]) <= abs(lineExp[prev2]) * tolerancePct
-                isGreen = df["close"].iat[prev] > df["open"].iat[prev]
-                if not (touchesSupport and isGreen):
-                    continue
-            elif opp['type'] == 'short':
-                touchesResistance = abs(df["high"].iat[prev2] - lineExp[prev2]) <= abs(lineExp[prev2]) * tolerancePct
-                isRed = df["close"].iat[prev] < df["open"].iat[prev]
-                if not (touchesResistance and isRed):
-                    continue
-            # Calculate moving averages
+            
+            # Calculate moving averages (keep calculation but remove from filtering for now)
             df['ma25'] = df['close'].rolling(window=25).mean()
             df['ma99'] = df['close'].rolling(window=99).mean()
             
-            # Get previous values for filtering
+            # Get previous values (keep for future use)
             ma25Prev = df['ma25'].iat[prev] if len(df) > 25 and not pd.isna(df['ma25'].iat[prev]) else None
             ma99Prev = df['ma99'].iat[prev] if len(df) > 99 and not pd.isna(df['ma99'].iat[prev]) else None
             
@@ -416,7 +409,7 @@ def analyzePairs():
 
         # Attempt to open position according to filters
         rejected = False
-        totalValidations = 8  # Total number of validation steps
+        totalValidations = 4  # Updated: Total number of validation steps (removed RANGE and MA validations)
         currentValidation = 1
         
         if opp["score"] < scoreThreshold:
@@ -460,37 +453,9 @@ def analyzePairs():
         # After basic filters, check entry-specific criteria for filter2
         filter2Passed = filter1Passed and not rejected
 
-        if not rejected:
-            currentValidation = 5  # RANGE validation
-            if not (opp["bounceLow"] <= opp["entryPrice"] <= opp["bounceHigh"]):
-                bl, bh, ep = opp["bounceLow"], opp["bounceHigh"], opp["entryPrice"]
-                if ep < bl:
-                    diff_pct = 100 * (bl - ep) / bl if bl != 0 else 0
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}) (BELOW): entryPrice {ep:.6f} < min {bl:.6f} ({diff_pct:.2f}% under)", console=0, log=1, telegram=0, pair=opp['pair'])
-                elif ep > bh:
-                    diff_pct = 100 * (ep - bh) / bh if bh != 0 else 0
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}) (ABOVE): entryPrice {ep:.6f} > max {bh:.6f} ({diff_pct:.2f}% over)", console=0, log=1, telegram=0, pair=opp['pair'])
-                else:
-                    messages(f"  ⚠️  {opp['pair']} rejected by RANGE ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} not in [{bl:.6f}, {bh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
-                rejected = True
-                filter2Passed = False
-            elif opp.get("ma25Prev") is None or opp.get("ma99Prev") is None:
-                currentValidation = 6  # MA validation
-                messages(f"  ⚠️  {opp['pair']} rejected ({currentValidation}/{totalValidations}): MA25prev or MA99prev is None", console=0, log=1, telegram=0, pair=opp['pair'])
-                rejected = True
-                filter2Passed = False
-            elif opp["entryPrice"] <= opp["ma25Prev"]:
-                currentValidation = 7  # MA25 validation
-                ep, mp = opp["entryPrice"], opp["ma25Prev"]
-                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA25 ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} <= MA25prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
-                rejected = True
-                filter2Passed = False
-            elif opp["entryPrice"] <= opp["ma99Prev"]:
-                currentValidation = 8  # MA99 validation
-                ep, mp = opp["entryPrice"], opp["ma99Prev"]
-                messages(f"  ⚠️  {opp['pair']} rejected by PRICE UNDER MA99 ({currentValidation}/{totalValidations}): entryPrice {ep:.6f} <= MA99prev {mp:.6f}", console=0, log=1, telegram=0, pair=opp['pair'])
-                rejected = True
-                filter2Passed = False
+        # Note: Removed RANGE validation (bounceLow/bounceHigh) and MA validations
+        # The bounce validation is now handled in supportDetector.py
+        
         record = None
         accepted = 0
         if not rejected:
