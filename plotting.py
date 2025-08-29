@@ -87,12 +87,6 @@ def savePlot(item):
         if touchesSupport and isGreen:
             bounceIdx = n-2  # Index of the candle that touched support
 
-    # Plot bounce bounds (lines ahead) - only from bounce point onwards
-    bl = item.get('bounceLow')
-    bh = item.get('bounceHigh')
-    minPctBounceAllowed = item.get('minPctBounceAllowed')
-    maxPctBounceAllowed = item.get('maxPctBounceAllowed')
-    
     # Determine the start point for horizontal lines (3 candles before bounce)
     if bounceIdx is not None:
         # Start from 3 candles before bounce point (or from start if not enough candles)
@@ -109,12 +103,9 @@ def savePlot(item):
     lineEndTime = lastTime + (candleInterval * 5)  # Extend 5 candles into future
     lineTimeRange = (lineStartTime, lineEndTime)
     
-    # English comment: Use new bounce fields for plot labels
-    if bl is not None and minPctBounceAllowed is not None:
-        ax.hlines(bl, *lineTimeRange, linestyle='--', color='purple', linewidth=1, label=f'Min Bounce ({minPctBounceAllowed*100:.1f}%)')
-    if bh is not None and maxPctBounceAllowed is not None:
-        ax.hlines(bh, *lineTimeRange, linestyle='--', color='purple', linewidth=1, label=f'Max Bounce ({maxPctBounceAllowed*100:.1f}%)')
-
+    # English comment: Bounce range lines removed as bounce validation no longer uses strict ranges
+    # The bounce detection is now handled in supportDetector.py with touch + 2 consecutive candles logic
+    
     # Plot TP/SL - only from bounce point onwards
     tp = item.get('tpPrice')
     sl = item.get('slPrice')
