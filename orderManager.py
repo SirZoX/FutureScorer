@@ -968,6 +968,18 @@ class OrderManager:
                     
                     if tpStatus in ['closed', 'filled', 'executed']:
                         messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                        # Save closing order details for P/L calculation
+                        position = self.positions.get(symbol, {})
+                        position['closingOrder'] = {
+                            'type': 'TP',
+                            'orderId': tpOrderId,
+                            'price': tpOrder.get('average') or tpOrder.get('price'),
+                            'amount': tpOrder.get('filled') or tpOrder.get('amount'),
+                            'fee': tpOrder.get('fee', {}),
+                            'timestamp': tpOrder.get('timestamp') or int(time.time() * 1000)
+                        }
+                        self.positions[symbol] = position
+                        messages(f"[DEBUG] Saved TP closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
@@ -981,6 +993,18 @@ class OrderManager:
                     
                     if slStatus in ['closed', 'filled', 'executed']:
                         messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                        # Save closing order details for P/L calculation
+                        position = self.positions.get(symbol, {})
+                        position['closingOrder'] = {
+                            'type': 'SL',
+                            'orderId': slOrderId,
+                            'price': slOrder.get('average') or slOrder.get('price'),
+                            'amount': slOrder.get('filled') or slOrder.get('amount'),
+                            'fee': slOrder.get('fee', {}),
+                            'timestamp': slOrder.get('timestamp') or int(time.time() * 1000)
+                        }
+                        self.positions[symbol] = position
+                        messages(f"[DEBUG] Saved SL closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
@@ -1054,7 +1078,42 @@ class OrderManager:
                 self.positions[symbol] = position
                 return
             
-            # Get all trades for this symbol since position opened
+            # Check if we have closing order details saved
+            closingOrder = position.get('closingOrder')
+            if closingOrder:
+                # Use saved closing order details for P/L calculation
+                closePrice = float(closingOrder.get('price', 0))
+                closedAmount = float(closingOrder.get('amount', 0))
+                orderType = closingOrder.get('type', 'Unknown')
+                
+                if closePrice and closedAmount:
+                    # Calculate P/L
+                    side = position.get('side', 'LONG')
+                    if side.upper() == 'LONG':
+                        pnlUsdt = (closePrice - openPrice) * closedAmount
+                    else:
+                        pnlUsdt = (openPrice - closePrice) * closedAmount
+                    
+                    pnlPct = (pnlUsdt / (openPrice * closedAmount)) * 100
+                    investment = float(position.get('investment_usdt', 0))
+                    leverage = int(position.get('leverage', 1))
+                    pnlOnInvestment = pnlPct * leverage
+                    
+                    # Format message
+                    cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
+                    pnlSign = "✅" if pnlUsdt >= 0 else "❌"
+                    
+                    message = (f"{pnlSign} {cleanSymbol} {orderType} ejecutado\n"
+                              f"💰 P/L: {pnlUsdt:.2f} USDT ({pnlOnInvestment:.2f}%)\n"
+                              f"📊 Precio: {openPrice} → {closePrice}\n"
+                              f"💎 Inversión: {investment} USDT (x{leverage})")
+                    
+                    messages(message, pair=symbol, console=1, log=1, telegram=1)
+                    position['notified'] = True
+                    self.positions[symbol] = position
+                    return
+            
+            # Fallback: try to get trades from exchange
             try:
                 allTrades = self.exchange.fetch_my_trades(symbol)
                 relevantTrades = [
@@ -1066,7 +1125,7 @@ class OrderManager:
                 sellTrades = [t for t in relevantTrades if t.get('side') == 'sell']
                 
                 if not sellTrades:
-                    # No sell trades found, send notification without bells
+                    # No sell trades found, send notification without P/L details
                     cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
                     simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync - no sell trades found)"
                     messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
