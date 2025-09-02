@@ -263,7 +263,7 @@ def getCurrentPrices(symbols):
 
 def printPositionsTable():
     from connector import bingxConnector
-    path = os.path.join(os.path.dirname(__file__), '_files', 'config', 'openedPositions.json')
+    path = os.path.join(os.path.dirname(__file__), '_files', 'json', 'openedPositions.json')
     if not os.path.isfile(path):
         print("No openedPositions.json found.")
         return
