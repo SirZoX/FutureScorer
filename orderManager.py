@@ -526,82 +526,64 @@ class OrderManager:
             # Usar el TP/SL activo (2 si existe, si no el 1)
             activeTpOrderId = tpOrderId2 if tpOrderId2 else tpOrderId1
             activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
-            try:
-                if activeTpOrderId:
-                    tpInfo = self.fetchOrderWithRetry(activeTpOrderId, symbol)
-                    if tpInfo is not None:
-                        tpStatus = str(tpInfo.get('status', '')).lower()
-                    else:
-                        # Rate limit reached, check trades instead
-                        messages(f"TP order status unavailable for {symbol}, checking trades", pair=symbol, console=0, log=1, telegram=0)
-                        
-                if activeSlOrderId:
-                    slInfo = self.fetchOrderWithRetry(activeSlOrderId, symbol)
-                    if slInfo is not None:
-                        slStatus = str(slInfo.get('status', '')).lower()
-                    else:
-                        # Rate limit reached, check trades instead
-                        messages(f"SL order status unavailable for {symbol}, checking trades", pair=symbol, console=0, log=1, telegram=0)
+            
+            # Use the improved order checking logic
+            hasClosingOrder = self._checkOrderStatusForClosure(symbol, activeTpOrderId, activeSlOrderId)
+            
+            if not hasClosingOrder:
+                continue  # Position still active, skip to next
                 
-                # If we couldn't get order status due to rate limits, check trades directly
-                if (activeTpOrderId and tpInfo is None) or (activeSlOrderId and slInfo is None):
-                    try:
-                        allTrades = self.exchange.fetch_my_trades(symbol)
-                        relevantTrades = [
-                            t for t in allTrades
-                            if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
-                        ]
-                        
-                        if relevantTrades:
-                            # Found sell trades, position is likely closed
-                            messages(f"Sell trades found for {symbol}, processing closure", pair=symbol, console=0, log=1, telegram=0)
-                            tpStatus = 'filled'  # Trigger closure processing
-                        else:
-                            # No sell trades found, position is still active
-                            messages(f"No sell trades found for {symbol}, assuming position still active", pair=symbol, console=0, log=1, telegram=0)
-                            continue
-                            
-                    except Exception as trade_error:
-                        messages(f"[ERROR] Could not fetch trades for {symbol}: {trade_error}", pair=symbol, console=1, log=1, telegram=0)
-                        continue
-                        
+            # If we reach here, a closing order was executed
+            # Determine close reason by checking which order was executed
+            close_reason = 'UNKNOWN'
+            if activeTpOrderId:
+                try:
+                    tpOrder = self.exchange.fetch_order(activeTpOrderId, symbol)
+                    if tpOrder.get('status') in ['closed', 'filled', 'executed']:
+                        close_reason = 'TP'
+                except:
+                    pass
+            
+            if close_reason == 'UNKNOWN' and activeSlOrderId:
+                try:
+                    slOrder = self.exchange.fetch_order(activeSlOrderId, symbol)
+                    if slOrder.get('status') in ['closed', 'filled', 'executed']:
+                        close_reason = 'SL'
+                except:
+                    pass
+            
+            # Process the closed position
+            try:
+                allTrades = self.exchange.fetch_my_trades(symbol)
+                
+                # Filter for sell trades after position open
+                sellTrades = [
+                    t for t in allTrades
+                    if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
+                ]
+                
+                if not sellTrades:
+                    messages(f"No sell trades found for {symbol} despite closed orders, skipping", pair=symbol, console=1, log=1, telegram=0)
+                    continue
+                
+                # Calculate totals from sell trades
+                totalQuantity = sum(float(t.get('amount', 0)) for t in sellTrades)
+                totalCost = sum(float(t.get('cost', 0)) for t in sellTrades)
+                totalFees = sum(float(t.get('fee', {}).get('cost', 0)) for t in sellTrades)
+                
+                # Calculate average exit price
+                avgExitPrice = totalCost / totalQuantity if totalQuantity > 0 else 0
+                
+                # Calculate investment and profit
+                actualInvestmentUsdt = buyQuantity * buyPrice
+                grossProfitQuote = totalCost - actualInvestmentUsdt
+                totalFeesComplete = totalFees
+                profitQuote = grossProfitQuote - totalFeesComplete
+                profitPct = (profitQuote / actualInvestmentUsdt) * 100 if actualInvestmentUsdt > 0 else 0
+            
             except Exception as e:
-                error_msg = str(e).lower()
-                if "order not exist" in error_msg or "80016" in error_msg:
-                    # Order doesn't exist - this is normal for active positions with TP/SL orders
-                    # Only process as closure if we can confirm actual trades occurred
-                    try:
-                        allTrades = self.exchange.fetch_my_trades(symbol)
-                        relevantTrades = [
-                            t for t in allTrades
-                            if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
-                        ]
-                        
-                        if not relevantTrades:
-                            # No sell trades found, position is likely still active
-                            messages(f"No sell trades found for {symbol}, assuming position still active", pair=symbol, console=0, log=1, telegram=0)
-                            continue
-                        
-                        # Found sell trades, position is likely closed
-                        messages(f"Sell trades found for {symbol}, processing closure", pair=symbol, console=1, log=1, telegram=0)
-                        tpStatus = 'filled'  # Trigger closure processing
-                        
-                    except Exception as trade_error:
-                        messages(f"[ERROR] Could not fetch trades for {symbol}: {trade_error}", pair=symbol, console=1, log=1, telegram=0)
-                        continue
-                elif "100410" in error_msg or "please try again later" in error_msg:
-                    # Rate limiting error already handled by fetchOrderWithRetry, skip this symbol
-                    messages(f"[RATE LIMIT] Skipping {symbol} due to API rate limiting", pair=symbol, console=0, log=1, telegram=0)
-                    continue
-                else:
-                    messages(f"[ERROR] fetch_order failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
-                    continue
-
-            close_reason = None
-            if tpStatus == 'filled':
-                close_reason = 'TP' 
-            elif slStatus == 'filled':
-                close_reason = 'SL'
+                messages(f"[ERROR] Could not process trades for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
+                continue
 
             if not close_reason:
                 continue
@@ -954,24 +936,16 @@ class OrderManager:
             except Exception as e:
                 messages(f"[ERROR] Error creando take profit: {e}", log=1)
 
-    def checkForClosingTrade(self, symbol):
+    def _checkOrderStatusForClosure(self, symbol, tpOrderId, slOrderId):
         """
-        Check if TP or SL orders have been executed to confirm position closure
-        Uses specific order IDs from the position data for precise verification
+        Helper method to check if TP or SL orders have been executed
+        Uses the same logic as checkForClosingTrade but returns boolean
         Returns True if any closing order is executed, False otherwise
         """
         try:
-            position = self.positions.get(symbol, {})
-            tpOrderId = position.get('tpOrderId1')
-            slOrderId = position.get('slOrderId1')
-            
             if not tpOrderId and not slOrderId:
-                messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, falling back to trade search", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, using fallback method", pair=symbol, console=0, log=1, telegram=0)
                 return self._checkForClosingTradesFallback(symbol)
-            
-            closingOrderExecuted = False
-            executedOrderType = None
-            executedOrderId = None
             
             # Check Take Profit order status
             if tpOrderId:
@@ -981,38 +955,42 @@ class OrderManager:
                     messages(f"[DEBUG] TP order {tpOrderId} status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if tpStatus in ['closed', 'filled', 'executed']:
-                        closingOrderExecuted = True
-                        executedOrderType = 'Take Profit'
-                        executedOrderId = tpOrderId
-                        messages(f"[DEBUG] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                        messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
+                        return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
             
             # Check Stop Loss order status
-            if slOrderId and not closingOrderExecuted:  # Only check SL if TP wasn't executed
+            if slOrderId:
                 try:
                     slOrder = self.exchange.fetch_order(slOrderId, symbol)
                     slStatus = slOrder.get('status', 'unknown')
                     messages(f"[DEBUG] SL order {slOrderId} status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if slStatus in ['closed', 'filled', 'executed']:
-                        closingOrderExecuted = True
-                        executedOrderType = 'Stop Loss'
-                        executedOrderId = slOrderId
-                        messages(f"[DEBUG] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                        messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
+                        return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
             
-            if closingOrderExecuted:
-                messages(f"[INFO] {executedOrderType} order {executedOrderId} executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
-                return True
-            else:
-                messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
-                return False
+            messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+            return False
                 
         except Exception as e:
             messages(f"[ERROR] Could not check closing orders for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
             return False
+
+    def checkForClosingTrade(self, symbol):
+        """
+        Check if TP or SL orders have been executed to confirm position closure
+        Uses specific order IDs from the position data for precise verification
+        Returns True if any closing order is executed, False otherwise
+        """
+        position = self.positions.get(symbol, {})
+        tpOrderId = position.get('tpOrderId1')
+        slOrderId = position.get('slOrderId1')
+        
+        return self._checkOrderStatusForClosure(symbol, tpOrderId, slOrderId)
     
     def _checkForClosingTradesFallback(self, symbol):
         """
