@@ -956,8 +956,68 @@ class OrderManager:
 
     def checkForClosingTrade(self, symbol):
         """
-        Check if there are any sell trades for a position to confirm closure
-        Returns True if sell trades are found, False otherwise
+        Check if TP or SL orders have been executed to confirm position closure
+        Uses specific order IDs from the position data for precise verification
+        Returns True if any closing order is executed, False otherwise
+        """
+        try:
+            position = self.positions.get(symbol, {})
+            tpOrderId = position.get('tpOrderId1')
+            slOrderId = position.get('slOrderId1')
+            
+            if not tpOrderId and not slOrderId:
+                messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, falling back to trade search", pair=symbol, console=0, log=1, telegram=0)
+                return self._checkForClosingTradesFallback(symbol)
+            
+            closingOrderExecuted = False
+            executedOrderType = None
+            executedOrderId = None
+            
+            # Check Take Profit order status
+            if tpOrderId:
+                try:
+                    tpOrder = self.exchange.fetch_order(tpOrderId, symbol)
+                    tpStatus = tpOrder.get('status', 'unknown')
+                    messages(f"[DEBUG] TP order {tpOrderId} status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
+                    
+                    if tpStatus in ['closed', 'filled', 'executed']:
+                        closingOrderExecuted = True
+                        executedOrderType = 'Take Profit'
+                        executedOrderId = tpOrderId
+                        messages(f"[DEBUG] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                except Exception as e:
+                    messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            
+            # Check Stop Loss order status
+            if slOrderId and not closingOrderExecuted:  # Only check SL if TP wasn't executed
+                try:
+                    slOrder = self.exchange.fetch_order(slOrderId, symbol)
+                    slStatus = slOrder.get('status', 'unknown')
+                    messages(f"[DEBUG] SL order {slOrderId} status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
+                    
+                    if slStatus in ['closed', 'filled', 'executed']:
+                        closingOrderExecuted = True
+                        executedOrderType = 'Stop Loss'
+                        executedOrderId = slOrderId
+                        messages(f"[DEBUG] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                except Exception as e:
+                    messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            
+            if closingOrderExecuted:
+                messages(f"[INFO] {executedOrderType} order {executedOrderId} executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
+                return True
+            else:
+                messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                return False
+                
+        except Exception as e:
+            messages(f"[ERROR] Could not check closing orders for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            return False
+    
+    def _checkForClosingTradesFallback(self, symbol):
+        """
+        Fallback method to check for closing trades when order IDs are not available
+        Uses the original trade search method
         """
         try:
             position = self.positions.get(symbol, {})
@@ -970,14 +1030,14 @@ class OrderManager:
             ]
             
             if relevantTrades:
-                messages(f"[DEBUG] Found {len(relevantTrades)} closing trades for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] Found {len(relevantTrades)} closing trades for {symbol} (fallback method)", pair=symbol, console=0, log=1, telegram=0)
                 return True
             else:
-                messages(f"[DEBUG] No closing trades found for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] No closing trades found for {symbol} (fallback method)", pair=symbol, console=0, log=1, telegram=0)
                 return False
                 
         except Exception as e:
-            messages(f"[ERROR] Could not check closing trades for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[ERROR] Could not check closing trades for {symbol} (fallback): {e}", pair=symbol, console=0, log=1, telegram=0)
             return False
 
     def notifyPositionClosed(self, symbol):
