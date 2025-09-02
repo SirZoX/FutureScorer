@@ -17,6 +17,7 @@ logsFolder = f"{baseFolder}/logs"           # log files
 configFile = f"{configFolder}/config.json"          # main bot config
 ignorePairsFile = f"{configFolder}/ignore_pairs.json"  # pairs to ignore
 selectionLogFile = f"{logsFolder}/selectionLog.csv"  # master selection log
+tradesLogFile = f"{logsFolder}/trades.csv"          # trades log
 marketsFile = f"{jsonFolder}/markets.json"
 positionsFile = f"{jsonFolder}/openedPositions.json"
 dailyBalanceFile = f"{jsonFolder}/dailyBalance.json"

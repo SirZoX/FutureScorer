@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 
 from logManager import messages
-from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder
+from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder, tradesLogFile
 from plotting import savePlot
 from configManager import configManager
 from logManager import messages
@@ -383,7 +383,7 @@ class OrderManager:
         try:
             import os
             
-            tradesFile = os.path.join(os.path.dirname(__file__), '_files', 'logs', 'trades.csv')
+            tradesFile = tradesLogFile
             
             # Prepare the trade record
             tradeRecord = {

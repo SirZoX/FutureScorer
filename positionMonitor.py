@@ -263,11 +263,12 @@ def getCurrentPrices(symbols):
 
 def printPositionsTable():
     from connector import bingxConnector
-    path = os.path.join(os.path.dirname(__file__), '_files', 'json', 'openedPositions.json')
-    if not os.path.isfile(path):
+    from gvars import positionsFile
+    
+    if not os.path.isfile(positionsFile):
         print("No openedPositions.json found.")
         return
-    with open(path, encoding='utf-8') as f:
+    with open(positionsFile, encoding='utf-8') as f:
         positions = json.load(f)
     if not positions:
         return
