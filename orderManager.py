@@ -955,7 +955,7 @@ class OrderManager:
                     messages(f"[DEBUG] TP order {tpOrderId} status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if tpStatus in ['closed', 'filled', 'executed']:
-                        messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
+                        messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
@@ -968,7 +968,7 @@ class OrderManager:
                     messages(f"[DEBUG] SL order {slOrderId} status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if slStatus in ['closed', 'filled', 'executed']:
-                        messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=1, log=1, telegram=0)
+                        messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
                     messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
@@ -1035,7 +1035,9 @@ class OrderManager:
             
             if not openPrice or not amount or not openTsUnix:
                 # Fallback to simple notification if data is missing
-                notifyPositionClosureSimple(symbol, "detected via exchange sync")
+                cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
+                simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync)"
+                messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
                 position['notified'] = True
                 self.positions[symbol] = position
                 return
@@ -1052,8 +1054,10 @@ class OrderManager:
                 sellTrades = [t for t in relevantTrades if t.get('side') == 'sell']
                 
                 if not sellTrades:
-                    # No sell trades found, fallback to simple notification
-                    notifyPositionClosureSimple(symbol, "detected via exchange sync - no sell trades found")
+                    # No sell trades found, send notification without bells
+                    cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
+                    simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync - no sell trades found)"
+                    messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
                     position['notified'] = True
                     self.positions[symbol] = position
                     return
@@ -1124,7 +1128,9 @@ class OrderManager:
             except Exception as trade_error:
                 messages(f"[ERROR] Could not calculate P/L for {symbol}: {trade_error}", pair=symbol, console=0, log=1, telegram=0)
                 # Fallback to simple notification
-                notifyPositionClosureSimple(symbol, "detected via exchange sync - P/L calculation failed")
+                cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
+                simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync - P/L calculation failed)"
+                messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
             
             # Mark as notified
             position['notified'] = True
