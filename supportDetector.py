@@ -1,163 +1,300 @@
 def findPossibleResistancesAndSupports(lows, highs, closes, opens, tolerancePct, minSeparation, minTouches, closeViolationPct=0.02):
     """
-    Detects possible support (long) and resistance (short) lines in a single pass.
+    Detects possible support (long) and resistance (short) lines using improved algorithm.
+    Detects both horizontal and diagonal lines with strict touch validation and noise allowance.
     Returns a list of opportunities, each with type ('long' or 'short'), slope, intercept, touchCount, lineExp, bases, and validation flags.
     """
     n = len(lows)
     if n < minSeparation + 2:
         return []
+    
     xIdx = np.arange(n)
+    allLines = []
+    strictTolerancePct = 0.002  # Much stricter tolerance for real touches (0.2%)
+    noiseThreshold = 0.10  # Allow 10% of early candles to be noise
+    
+    # 1. Find horizontal support lines
+    horizontalSupports = _findHorizontalLines(lows, highs, closes, opens, 'support', xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation)
+    allLines.extend(horizontalSupports)
+    
+    # 2. Find horizontal resistance lines  
+    horizontalResistances = _findHorizontalLines(lows, highs, closes, opens, 'resistance', xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation)
+    allLines.extend(horizontalResistances)
+    
+    # 3. Find diagonal support lines
+    diagonalSupports = _findDiagonalLines(lows, highs, closes, opens, 'support', xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation)
+    allLines.extend(diagonalSupports)
+    
+    # 4. Find diagonal resistance lines
+    diagonalResistances = _findDiagonalLines(lows, highs, closes, opens, 'resistance', xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation)
+    allLines.extend(diagonalResistances)
+    
+    # Sort by quality score and apply bounce validation
+    allLines.sort(key=lambda x: x['qualityScore'], reverse=True)
+    
+    # Apply bounce validation to the best lines
     opportunities = []
-    for i in range(n - minSeparation):
-        for j in range(i + minSeparation, n):
-            y1, y2 = lows[i], lows[j]
-            x1, x2 = i, j
-            slope = (y2 - y1) / (x2 - x1)
-            intercept = y1 - slope * x1
-            lineExp = slope * xIdx + intercept
+    for line in allLines:
+        if _validateBounce(line, lows, highs, closes, opens, n, strictTolerancePct):
+            opportunities.append(line)
+    
+    return opportunities
+
+
+def _findHorizontalLines(lows, highs, closes, opens, lineType, xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation):
+    """Find horizontal support or resistance lines"""
+    lines = []
+    n = len(lows)
+    data = lows if lineType == 'support' else highs
+    
+    # Find potential horizontal levels by clustering similar price points
+    priceClusters = _findPriceClusters(data, strictTolerancePct)
+    
+    for level in priceClusters:
+        if lineType == 'support':
+            # For support, count touches where low touches the level
+            touchIndices = []
+            for i in range(n):
+                if abs(lows[i] - level) <= level * strictTolerancePct:
+                    touchIndices.append(i)
+        else:
+            # For resistance, count touches where high touches the level
+            touchIndices = []
+            for i in range(n):
+                if abs(highs[i] - level) <= level * strictTolerancePct:
+                    touchIndices.append(i)
+        
+        if len(touchIndices) < minTouches:
+            continue
+        
+        # Check line respect with noise allowance
+        lineExp = np.full(n, level)
+        respectScore = _calculateLineRespect(lineExp, lows, highs, closes, lineType, noiseThreshold)
+        
+        if respectScore['isValid']:
+            qualityScore = _calculateQualityScore(len(touchIndices), respectScore, 0.0)  # slope = 0 for horizontal
             
-            # Determine if this is support (positive slope) or resistance (negative slope)
-            # and use appropriate data for touch calculation
-            if slope > 0:
-                # Support line - use lows for touches
-                touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
-            else:
-                # Resistance line - use highs for touches  
-                touchMask = np.abs(highs - lineExp) <= np.abs(lineExp) * tolerancePct
-                
-            touchCount = int(touchMask.sum())
-            if touchCount < minTouches:
-                continue
-            
-            # Improve line calculation: adjust to pass closer to recent bounce points
-            # Find the most recent touch point in the last 5 candles and use open/close for better accuracy
-            recentTouchIdx = None
-            recentTouchValue = None
-            
-            if slope > 0:  # Support line
-                # For support, look for candles that touch or pierce the line
-                for k in range(max(0, n-5), n):
-                    if lows[k] <= lineExp[k] and np.abs(lows[k] - lineExp[k]) <= np.abs(lineExp[k]) * tolerancePct:
-                        recentTouchIdx = k
-                        # Use the open price of the bounce candle for better line fitting
-                        # If it's a green candle after touching support, use the open (entry point)
-                        if closes[k] > opens[k]:  # Green candle
-                            recentTouchValue = opens[k]
-                        else:
-                            recentTouchValue = lows[k]  # Use low if red candle
-                        break  # Take the first (earliest) touch in recent candles
-            else:  # Resistance line
-                for k in range(max(0, n-5), n):
-                    if highs[k] >= lineExp[k] and np.abs(highs[k] - lineExp[k]) <= np.abs(lineExp[k]) * tolerancePct:
-                        recentTouchIdx = k
-                        # Use the open price of the bounce candle for better line fitting
-                        if closes[k] < opens[k]:  # Red candle
-                            recentTouchValue = opens[k]
-                        else:
-                            recentTouchValue = highs[k]  # Use high if green candle
-                        break
-            
-            # If we found a recent touch, adjust the line to pass through it more precisely
-            if recentTouchIdx is not None and recentTouchIdx != j and recentTouchValue is not None:
-                # Use the original point i and the recent touch point to recalculate
-                y1, y2 = lows[i], recentTouchValue
-                x1, x2 = i, recentTouchIdx
-                
-                # Recalculate slope and intercept with adjusted points
-                if x2 != x1:  # Avoid division by zero
-                    slope = (y2 - y1) / (x2 - x1)
-                    intercept = y1 - slope * x1
-                    lineExp = slope * xIdx + intercept
-                    
-                    # Recalculate touches with adjusted line
-                    if slope > 0:
-                        touchMask = np.abs(lows - lineExp) <= np.abs(lineExp) * tolerancePct
-                    else:
-                        touchMask = np.abs(highs - lineExp) <= np.abs(lineExp) * tolerancePct
-                    touchCount = int(touchMask.sum())
-            # Percentage of candles with close above/below the line
+            # Calculate ratios for compatibility
             closesAbove = closes > lineExp
             closesBelow = closes < lineExp
             ratioAbove = closesAbove.sum() / n
             ratioBelow = closesBelow.sum() / n
-            violationRatio = min(ratioBelow, ratioAbove)
-            # Soporte (long): slope positivo y % de velas por encima suficiente
-            if slope > 0:
-                # Últimas dos velas deben estar por encima de la línea
-                if lows[-1] < lineExp[-1] or lows[-2] < lineExp[-2]:
-                    continue
+            
+            lines.append({
+                'type': 'long' if lineType == 'support' else 'short',
+                'slope': 0.0,
+                'intercept': level,
+                'touchCount': len(touchIndices),
+                'lineExp': lineExp,
+                'bases': [touchIndices[0], touchIndices[-1]] if touchIndices else [0, n-1],
+                'touchIndices': touchIndices,
+                'respectScore': respectScore,
+                'qualityScore': qualityScore,
+                'lineType': 'horizontal',
+                'ratioAbove': ratioAbove,
+                'ratioBelow': ratioBelow
+            })
+    
+    return lines
+
+
+def _findDiagonalLines(lows, highs, closes, opens, lineType, xIdx, strictTolerancePct, noiseThreshold, minTouches, minSeparation):
+    """Find diagonal support or resistance lines"""
+    lines = []
+    n = len(lows)
+    data = lows if lineType == 'support' else highs
+    
+    # Test diagonal lines between significant points
+    for i in range(0, n - minSeparation):
+        for j in range(i + minSeparation, n):
+            y1, y2 = data[i], data[j]
+            x1, x2 = i, j
+            
+            slope = (y2 - y1) / (x2 - x1)
+            
+            # Filter by slope direction
+            if lineType == 'support' and slope < 0:
+                continue  # Support lines should be ascending or flat
+            if lineType == 'resistance' and slope > 0:
+                continue  # Resistance lines should be descending or flat
+            
+            intercept = y1 - slope * x1
+            lineExp = slope * xIdx + intercept
+            
+            # Count real touches (very strict)
+            touchIndices = []
+            for k in range(n):
+                if lineType == 'support':
+                    if abs(lows[k] - lineExp[k]) <= abs(lineExp[k]) * strictTolerancePct:
+                        touchIndices.append(k)
+                else:
+                    if abs(highs[k] - lineExp[k]) <= abs(lineExp[k]) * strictTolerancePct:
+                        touchIndices.append(k)
+            
+            if len(touchIndices) < minTouches:
+                continue
+            
+            # Check line respect with noise allowance
+            respectScore = _calculateLineRespect(lineExp, lows, highs, closes, lineType, noiseThreshold)
+            
+            if respectScore['isValid']:
+                qualityScore = _calculateQualityScore(len(touchIndices), respectScore, abs(slope))
                 
-                # New bounce validation: must have support touch + 2 green candles
-                # Check if there's a touch to support line within tolerance in recent candles
-                hasTouchToSupport = False
-                # Check last 3 candles for support touch (including piercing within tolerance)
-                for k in range(max(0, n-3), n):
-                    if (lows[k] <= lineExp[k] and 
-                        abs(lows[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
-                        hasTouchToSupport = True
-                        break
+                # Calculate ratios for compatibility
+                closesAbove = closes > lineExp
+                closesBelow = closes < lineExp
+                ratioAbove = closesAbove.sum() / n
+                ratioBelow = closesBelow.sum() / n
                 
-                # Must have 2 consecutive green candles after the touch
-                hasGreenBounce = (closes[-1] > opens[-1] and closes[-2] > opens[-2])
-                
-                # Combined bounce validation
-                bounce = hasTouchToSupport and hasGreenBounce
-                
-                if ratioAbove > 1 - closeViolationPct and bounce:
-                    opportunities.append({
-                        'type': 'long',
-                        'slope': slope,
-                        'intercept': intercept,
-                        'touchCount': touchCount,
-                        'lineExp': lineExp,
-                        'bases': [i, j],
-                        'ratioAbove': ratioAbove,
-                        'ratioBelow': ratioBelow,
-                        'bounce': bounce,
-                        'hasTouchToSupport': hasTouchToSupport,
-                        'hasGreenBounce': hasGreenBounce,
-                        'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
-                        'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
-                    })
-            # Resistencia (short): slope negativo y % de velas por debajo suficiente
-            elif slope < 0:
-                # Últimas dos velas deben estar por debajo de la línea
-                if highs[-1] > lineExp[-1] or highs[-2] > lineExp[-2]:
-                    continue
-                
-                # New bounce validation: must have resistance touch + 2 red candles
-                # Check if there's a touch to resistance line within tolerance in recent candles
-                hasTouchToResistance = False
-                # Check last 3 candles for resistance touch (including piercing within tolerance)
-                for k in range(max(0, n-3), n):
-                    if (highs[k] >= lineExp[k] and 
-                        abs(highs[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
-                        hasTouchToResistance = True
-                        break
-                
-                # Must have 2 consecutive red candles after the touch
-                hasRedBounce = (closes[-1] < opens[-1] and closes[-2] < opens[-2])
-                
-                # Combined bounce validation
-                bounce = hasTouchToResistance and hasRedBounce
-                
-                if ratioBelow > 1 - closeViolationPct and bounce:
-                    opportunities.append({
-                        'type': 'short',
-                        'slope': slope,
-                        'intercept': intercept,
-                        'touchCount': touchCount,
-                        'lineExp': lineExp,
-                        'bases': [i, j],
-                        'ratioAbove': ratioAbove,
-                        'ratioBelow': ratioBelow,
-                        'bounce': bounce,
-                        'hasTouchToResistance': hasTouchToResistance,
-                        'hasRedBounce': hasRedBounce,
-                        'minPctBounceAllowed': cfg.get('minPctBounceAllowed', 0.002),
-                        'maxPctBounceAllowed': cfg.get('maxPctBounceAllowed', 0.002),
-                    })
-    return opportunities
+                lines.append({
+                    'type': 'long' if lineType == 'support' else 'short',
+                    'slope': slope,
+                    'intercept': intercept,
+                    'touchCount': len(touchIndices),
+                    'lineExp': lineExp,
+                    'bases': [i, j],
+                    'touchIndices': touchIndices,
+                    'respectScore': respectScore,
+                    'qualityScore': qualityScore,
+                    'lineType': 'diagonal',
+                    'ratioAbove': ratioAbove,
+                    'ratioBelow': ratioBelow
+                })
+    
+    return lines
+
+
+def _findPriceClusters(data, tolerance):
+    """Find price levels where multiple data points cluster together"""
+    clusters = []
+    sorted_prices = sorted(set(data))
+    
+    i = 0
+    while i < len(sorted_prices):
+        cluster_prices = [sorted_prices[i]]
+        j = i + 1
+        
+        # Group nearby prices into same cluster
+        while j < len(sorted_prices) and sorted_prices[j] - sorted_prices[i] <= sorted_prices[i] * tolerance * 2:
+            cluster_prices.append(sorted_prices[j])
+            j += 1
+        
+        # Only consider clusters with multiple price points
+        if len(cluster_prices) >= 2:
+            clusters.append(sum(cluster_prices) / len(cluster_prices))  # Average price of cluster
+        
+        i = j
+    
+    return clusters
+
+
+def _calculateLineRespect(lineExp, lows, highs, closes, lineType, noiseThreshold):
+    """Calculate how well the line is respected with noise allowance"""
+    n = len(lineExp)
+    
+    if lineType == 'support':
+        # For support: lows should not pierce below line (except initial noise)
+        violations = lows < lineExp
+    else:
+        # For resistance: highs should not pierce above line (except initial noise)
+        violations = highs > lineExp
+    
+    # Allow noise in the first portion of the data
+    noiseAllowedCandles = int(n * noiseThreshold)
+    violationsAfterNoise = violations[noiseAllowedCandles:]
+    
+    totalViolations = violations.sum()
+    significantViolations = violationsAfterNoise.sum()
+    violationRatio = significantViolations / (n - noiseAllowedCandles) if n > noiseAllowedCandles else totalViolations / n
+    
+    # Line is valid if violation ratio is very low
+    isValid = violationRatio <= 0.05  # Allow max 5% violations after noise period
+    
+    return {
+        'isValid': isValid,
+        'violationRatio': violationRatio,
+        'totalViolations': totalViolations,
+        'significantViolations': significantViolations,
+        'noiseViolations': totalViolations - significantViolations
+    }
+
+
+def _calculateQualityScore(touchCount, respectScore, slope):
+    """Calculate overall quality score for a line"""
+    # Base score from touches
+    touchScore = touchCount * 10
+    
+    # Penalty for violations (heavy penalty)
+    violationPenalty = respectScore['violationRatio'] * 100
+    
+    # Slight preference for horizontal lines (easier to trade)
+    slopePenalty = abs(slope) * 5
+    
+    # Bonus for very few violations
+    if respectScore['violationRatio'] < 0.01:
+        violationBonus = 20
+    else:
+        violationBonus = 0
+    
+    qualityScore = touchScore - violationPenalty - slopePenalty + violationBonus
+    
+    return max(0, qualityScore)  # Ensure non-negative score
+
+
+def _validateBounce(line, lows, highs, closes, opens, n, tolerancePct):
+    """Apply bounce validation to a line (from original algorithm)"""
+    lineExp = line['lineExp']
+    lineType = line['type']
+    
+    if lineType == 'long':  # Support validation
+        # Last two candles must be above the line
+        if lows[-1] < lineExp[-1] or lows[-2] < lineExp[-2]:
+            return False
+        
+        # Check for bounce: touch + 2 green candles
+        hasTouchToSupport = False
+        for k in range(max(0, n-3), n):
+            if (lows[k] <= lineExp[k] and 
+                abs(lows[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
+                hasTouchToSupport = True
+                break
+        
+        hasGreenBounce = (closes[-1] > opens[-1] and closes[-2] > opens[-2])
+        bounce = hasTouchToSupport and hasGreenBounce
+        
+        if line['ratioAbove'] > 1 - 0.02 and bounce:  # closeViolationPct = 0.02
+            line['bounce'] = bounce
+            line['hasTouchToSupport'] = hasTouchToSupport
+            line['hasGreenBounce'] = hasGreenBounce
+            line['minPctBounceAllowed'] = cfg.get('minPctBounceAllowed', 0.002)
+            line['maxPctBounceAllowed'] = cfg.get('maxPctBounceAllowed', 0.002)
+            return True
+    
+    elif lineType == 'short':  # Resistance validation
+        # Last two candles must be below the line
+        if highs[-1] > lineExp[-1] or highs[-2] > lineExp[-2]:
+            return False
+        
+        # Check for bounce: touch + 2 red candles
+        hasTouchToResistance = False
+        for k in range(max(0, n-3), n):
+            if (highs[k] >= lineExp[k] and 
+                abs(highs[k] - lineExp[k]) <= abs(lineExp[k]) * tolerancePct):
+                hasTouchToResistance = True
+                break
+        
+        hasRedBounce = (closes[-1] < opens[-1] and closes[-2] < opens[-2])
+        bounce = hasTouchToResistance and hasRedBounce
+        
+        if line['ratioBelow'] > 1 - 0.02 and bounce:  # closeViolationPct = 0.02
+            line['bounce'] = bounce
+            line['hasTouchToResistance'] = hasTouchToResistance
+            line['hasRedBounce'] = hasRedBounce
+            line['minPctBounceAllowed'] = cfg.get('minPctBounceAllowed', 0.002)
+            line['maxPctBounceAllowed'] = cfg.get('maxPctBounceAllowed', 0.002)
+            return True
+    
+    return False
 
 # supportDetector.py
 import json

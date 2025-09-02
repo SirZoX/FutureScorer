@@ -13,6 +13,9 @@ __pycache__/
 *.png
 *.jpg
 
+# Test plots directory - should not be synced
+extras/plotsTest/
+
 # Distribution / packaging
 .Python
 build/
