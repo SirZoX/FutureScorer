@@ -785,6 +785,9 @@ class OrderManager:
                     'newClientOrderId': clientId
                 }
             )
+            # Log complete order response
+            messages(f"[DEBUG] Complete order response for {symbol}: {orderResp}", pair=symbol, console=0, log=1, telegram=0)
+            
             filled    = Decimal(str(orderResp.get('filled') or orderResp.get('amount') or 0))
             openPrice = Decimal(str(orderResp.get('price') or price))
             messages(f"  ➡️   Futures order executed for {symbol}: side={side}, filled={filled}, price={openPrice}, leverage={leverage}", pair=symbol, console=1, log=1, telegram=0)
@@ -820,7 +823,10 @@ class OrderManager:
                     'positionSide': positionSide
                 }
             )
+            # Log complete TP order response
+            messages(f"[DEBUG] Complete TP order response for {symbol}: {tpOrder}", pair=symbol, console=0, log=1, telegram=0)
             tpId = tpOrder.get('id')
+            messages(f"[DEBUG] TP order ID extracted: {tpId}", pair=symbol, console=0, log=1, telegram=0)
             # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando TP: {e}", log=1)
@@ -835,7 +841,10 @@ class OrderManager:
                     'positionSide': positionSide
                 }
             )
+            # Log complete SL order response
+            messages(f"[DEBUG] Complete SL order response for {symbol}: {slOrder}", pair=symbol, console=0, log=1, telegram=0)
             slId = slOrder.get('id')
+            messages(f"[DEBUG] SL order ID extracted: {slId}", pair=symbol, console=0, log=1, telegram=0)
             # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando SL: {e}", log=1)
@@ -859,6 +868,9 @@ class OrderManager:
             'investment_usdt': investUSDC,
             'side': side.upper()  # Add side information (LONG/SHORT)
         }
+        # Log the complete position record being saved
+        messages(f"[DEBUG] Saving position record for {symbol}: {record}", pair=symbol, console=0, log=1, telegram=0)
+        
         self.positions[symbol] = record
         self.savePositions()
         # Enviar plot por Telegram tras abrir posición
