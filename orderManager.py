@@ -424,36 +424,34 @@ class OrderManager:
             openDateIso = position.get('timestamp', '')  # Format: "2025-08-26 16-30-59"
             openPrice = float(position.get('openPrice', 0))
             amount = float(position.get('amount', 0))
+            leverage = int(position.get('leverage', 10))  # Get leverage from position or default 10
             
             # Calculate investment (amount * price / leverage)
-            # Assuming leverage 10 (could be extracted from position if stored)
-            leverage = 10  # Default, could be made configurable
             investmentUsdt = (amount * openPrice) / leverage
             
-            # Format dates
+            # Format dates with consistent format using colons for time
+            currentTime = datetime.now()
+            
             if openDateIso:
                 try:
-                    # Convert from "2025-08-26 16-30-59" format to proper format
-                    openDateFormatted = openDateIso.replace('-', ':', 2).replace('-', '/')
-                    openDateObj = datetime.strptime(openDateFormatted, '%Y/%m/%d %H:%M:%S')
-                    openDateHuman = openDateObj.strftime('%Y-%m-%d %H:%M:%S')
-                except:
+                    # Parse from "2025-08-26 16-30-59" format
+                    openDateObj = datetime.strptime(openDateIso, '%Y-%m-%d %H-%M-%S')
+                    openDateHuman = openDateObj.strftime('%Y-%m-%d %H:%M:%S')  # Use colons for consistency
+                except Exception as parse_error:
+                    messages(f"[DEBUG] Date parse error for {symbol}: {parse_error}, using raw date", pair=symbol, console=0, log=1, telegram=0)
                     openDateHuman = openDateIso
+                    openDateObj = None
             else:
                 openDateHuman = "Unknown"
+                openDateObj = None
             
-            # Current time as close date
-            closeDateHuman = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Current time as close date with colons
+            closeDateHuman = currentTime.strftime('%Y-%m-%d %H:%M:%S')
             
             # Calculate elapsed time
-            try:
-                if openDateIso:
-                    openDateFormatted = openDateIso.replace('-', ':', 2).replace('-', '/')
-                    openDateObj = datetime.strptime(openDateFormatted, '%Y/%m/%d %H:%M:%S')
-                    closeeDateObj = datetime.now()
-                    elapsed = closeeDateObj - openDateObj
-                    
-                    # Format elapsed time as human readable
+            if openDateObj:
+                try:
+                    elapsed = currentTime - openDateObj
                     totalSeconds = int(elapsed.total_seconds())
                     hours = totalSeconds // 3600
                     minutes = (totalSeconds % 3600) // 60
@@ -465,10 +463,13 @@ class OrderManager:
                         elapsedHuman = f"{minutes}m {seconds}s"
                     else:
                         elapsedHuman = f"{seconds}s"
-                else:
+                except Exception as elapsed_error:
+                    messages(f"[DEBUG] Elapsed calculation error for {symbol}: {elapsed_error}", pair=symbol, console=0, log=1, telegram=0)
                     elapsedHuman = "Unknown"
-            except:
+            else:
                 elapsedHuman = "Unknown"
+            
+            messages(f"[DEBUG] Logging trade for {symbol}: open={openDateHuman}, close={closeDateHuman}, elapsed={elapsedHuman}, investment={investmentUsdt:.4f}, profit={netProfitUsdt:.4f}", pair=symbol, console=0, log=1, telegram=0)
             
             # Log the trade
             self.logTrade(
