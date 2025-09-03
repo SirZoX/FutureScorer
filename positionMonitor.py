@@ -216,9 +216,9 @@ def syncOpenedPositions():
 monitorActive = threading.Event()
 monitorActive.set()  # Start enabled by default
 
-def colorText(text, color):
+def colorText(text, color, width=None):
     """
-    Returns text colored for console output (red/green)
+    Returns text colored for console output with optional width formatting
     """
     colors = {
         'red': '\033[91m',
@@ -227,24 +227,36 @@ def colorText(text, color):
         'orange': '\033[38;5;208m',
         'reset': '\033[0m'
     }
-    return f"{colors.get(color, '')}{text}{colors['reset']}"
+    if width:
+        # Apply width formatting to the text before adding colors
+        formatted_text = f"{text:>{width}}"
+        return f"{colors.get(color, '')}{formatted_text}{colors['reset']}"
+    else:
+        return f"{colors.get(color, '')}{text}{colors['reset']}"
 
-def fmtNum(num, maxInt=5, maxDec=6):
+def fmtNum(num, maxInt=5, maxDec=6, width=None):
     """
     Formats a number with up to maxInt integer digits and exactly maxDec decimals, padding with zeros if needed
     """
     if isinstance(num, int):
-        return f"{num:>{maxInt}}.{'0'*maxDec}"
-    s = f"{num:.{maxDec}f}"
-    parts = s.split('.')
-    if len(parts[0]) > maxInt:
-        parts[0] = parts[0][-maxInt:]
-    # Pad decimals to maxDec
-    if len(parts) == 2:
-        parts[1] = parts[1].ljust(maxDec, '0')
-        return f"{parts[0]}.{parts[1]}"
+        formatted = f"{num:>{maxInt}}.{'0'*maxDec}"
     else:
-        return f"{parts[0]}.{'0'*maxDec}"
+        s = f"{num:.{maxDec}f}"
+        parts = s.split('.')
+        if len(parts[0]) > maxInt:
+            parts[0] = parts[0][-maxInt:]
+        # Pad decimals to maxDec
+        if len(parts) == 2:
+            parts[1] = parts[1].ljust(maxDec, '0')
+            formatted = f"{parts[0]}.{parts[1]}"
+        else:
+            formatted = f"{parts[0]}.{'0'*maxDec}"
+    
+    # Apply width formatting if specified
+    if width:
+        return f"{formatted:>{width}}"
+    else:
+        return formatted
 
 def fmtSymbol(symbol):
     return symbol.ljust(20)[:20]  # Reduced from 25 to 20 for better fit
@@ -299,7 +311,7 @@ def printPositionsTable():
         except Exception:
             tickers = {}
     # Updated header with Long/Short column and properly aligned
-    header = f"{'Hora':19} | {'Par':20} | {'L/S':4} | {'TP%':5} | {'SL%':5} | {'P/L%':9} | {'Inversión':12} | {'Entrada':10} | {'TP':10} | {'SL':10} | {'Abierta':12}"
+    header = f"{'Hour':19} | {'Pair':20} | {'side':6} | {'TP%':7} | {'SL%':7} | {'PNL%':12} | {'Investment':12} | {'EntryPrice':10} | {'TP':10} | {'SL':10} | {'Live for':12}"
     print()
     print('-'*len(header))
     print(header)
@@ -323,10 +335,10 @@ def printPositionsTable():
             float(pos.get('slPrice', 0))
         )
         invest = openPrice * amount
-        investStr = fmtNum(invest, 5, 4)  # Adjusted for better fit
-        openPriceStr = fmtNum(openPrice, 5, 5)
-        tpPriceStr = fmtNum(tpPrice, 5, 5)
-        slPriceStr = fmtNum(slPrice, 5, 5)
+        investStr = fmtNum(invest, 5, 4, 12)  # Width 12 for Investment column
+        openPriceStr = fmtNum(openPrice, 5, 5, 10)  # Width 10 for EntryPrice column
+        tpPriceStr = fmtNum(tpPrice, 5, 5, 10)  # Width 10 for TP column
+        slPriceStr = fmtNum(slPrice, 5, 5, 10)  # Width 10 for SL column
         entryTs = int(pos.get('open_ts_unix', now))
         delta = now - entryTs
         deltaStr = fmtTimeDelta(delta)
@@ -339,8 +351,8 @@ def printPositionsTable():
             float(pos.get('slPercent2')) if pos.get('slPercent2') not in (None, 0, '', 'null') else
             float(pos.get('slPercent', 0))
         )
-        tpPercentStr = colorText(f"{tpPercent:4.1f}" if tpPercent is not None else ' --', 'green')
-        slPercentStr = colorText(f"{slPercent:4.1f}" if slPercent is not None else ' --', 'red')
+        tpPercentStr = colorText(f"{tpPercent:4.1f}" if tpPercent is not None else ' --', 'green', 10)
+        slPercentStr = colorText(f"{slPercent:4.1f}" if slPercent is not None else ' --', 'red', 10)
         # Get current price from ticker
         ticker = tickers.get(pos.get('symbol', ''), {})
         currentPrice = ticker.get('last', openPrice)
@@ -364,7 +376,7 @@ def printPositionsTable():
             else:
                 pctColor = 'red'
         hora = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-        print(f"{hora:19} | {symbol:20} | {sideStr:4} | {tpPercentStr:>5} | {slPercentStr:>5} | {colorText(pctStr, pctColor):>9} | {investStr:>12} | {openPriceStr:>10} | {tpPriceStr:>10} | {slPriceStr:>10} | {deltaStr:>12}")
+        print(f"{hora:19} | {symbol:20} | {sideStr:6} | {tpPercentStr} | {slPercentStr} | {colorText(pctStr, pctColor, 12)} | {investStr} | {openPriceStr} | {tpPriceStr} | {slPriceStr} | {deltaStr:>12}")
 
 def monitorPositions():
     from logManager import messages
