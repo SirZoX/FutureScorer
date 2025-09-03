@@ -553,7 +553,7 @@ def analyzePairs():
             helpers.fmt((record or {}).get("slPrice", 0), 6),
             helpers.fmt(opp["bounceLow"], 6),
             helpers.fmt(opp["bounceHigh"], 6),
-            helpers.fmt(opp.get("ma25Prev", 0), 6),
+            helpers.fmt(opp.get("ma25Prev") or 0, 6),  # Handle None values from optimized processing
             str(int(opp["filter1Passed"])),
             str(int(opp["filter2Passed"])),
             helpers.fmt(w["distance"], 3),
