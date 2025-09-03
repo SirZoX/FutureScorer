@@ -1146,6 +1146,24 @@ class OrderManager:
                     message = (f"{pnlSign} {side} {cleanSymbol} {orderType} P/L: {pnlUsdt:.2f} USDT ({pnlOnInvestment:.2f}%) Investment: {investment} USDT (x{leverage})")
                     
                     messages(message, pair=symbol, console=1, log=1, telegram=1)
+                    
+                    # Update selectionLog with close data
+                    try:
+                        # Construct recordId from position TP/SL order IDs
+                        tpOrderId1 = position.get('tpOrderId1', '')
+                        tpOrderId2 = position.get('tpOrderId2', '')
+                        slOrderId1 = position.get('slOrderId1', '')
+                        slOrderId2 = position.get('slOrderId2', '')
+                        activeTpOrderId = tpOrderId2 if tpOrderId2 else tpOrderId1
+                        activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
+                        recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
+                        tsOpenIso = position.get('timestamp', '')
+                        
+                        messages(f"[DEBUG] Attempting to annotate selectionLog for {symbol} (closingOrder): recordId='{recordId}', profit={pnlUsdt:.4f}, pct={pnlOnInvestment:.2f}", pair=symbol, console=0, log=1, telegram=0)
+                        self.annotateSelectionLog(recordId, pnlUsdt, pnlOnInvestment, tsOpenIso)
+                    except Exception as annotate_error:
+                        messages(f"[ERROR] Failed to annotate selectionLog for {symbol}: {annotate_error}", pair=symbol, console=0, log=1, telegram=0)
+                    
                     position['notified'] = True
                     self.positions[symbol] = position
                     return
@@ -1234,6 +1252,27 @@ class OrderManager:
                 
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
+                
+                # Update selectionLog with close data
+                try:
+                    # Construct recordId from position TP/SL order IDs
+                    tpOrderId1 = position.get('tpOrderId1', '')
+                    tpOrderId2 = position.get('tpOrderId2', '')
+                    slOrderId1 = position.get('slOrderId1', '')
+                    slOrderId2 = position.get('slOrderId2', '')
+                    activeTpOrderId = tpOrderId2 if tpOrderId2 else tpOrderId1
+                    activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
+                    recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
+                    tsOpenIso = position.get('timestamp', '')
+                    
+                    # Calculate profit percentage on investment (leverage-adjusted)
+                    leverage = position.get('leverage', 10)
+                    profitPctOnInvestment = netProfitPct * leverage
+                    
+                    messages(f"[DEBUG] Attempting to annotate selectionLog for {symbol} (trades): recordId='{recordId}', profit={netProfitQuote:.4f}, pct={profitPctOnInvestment:.2f}", pair=symbol, console=0, log=1, telegram=0)
+                    self.annotateSelectionLog(recordId, netProfitQuote, profitPctOnInvestment, tsOpenIso)
+                except Exception as annotate_error:
+                    messages(f"[ERROR] Failed to annotate selectionLog for {symbol}: {annotate_error}", pair=symbol, console=0, log=1, telegram=0)
                 
             except Exception as trade_error:
                 messages(f"[ERROR] Could not calculate P/L for {symbol}: {trade_error}", pair=symbol, console=0, log=1, telegram=0)
