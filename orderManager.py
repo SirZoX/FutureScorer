@@ -204,17 +204,29 @@ class OrderManager:
                     # This prevents old positions from staying forever due to API limitations
                     isOldPosition = timeSinceOpen > 86400  # 24 hours in seconds
                     
-                    if hasClosingTrade:
-                        # Only remove if we have confirmed closing trades and not yet notified
+                    # Be more conservative: only remove if we have confirmed closing trades
+                    if hasClosingTrade is True:
+                        # Confirmed closing trade found
                         symbolsToRemove.append(symbol)
                         symbolsToNotify.append(symbol)
                         messages(f"[DEBUG] Position {symbol} confirmed closed via trades, safe to remove", console=0, log=1, telegram=0)
-                    elif isOldPosition:
-                        # Remove old positions that are not on exchange (likely closed but trades not accessible)
+                    elif hasClosingTrade is False and isOldPosition:
+                        # Confirmed open but very old position - remove anyway
                         symbolsToRemove.append(symbol)
                         symbolsToNotify.append(symbol)
-                        messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and not on exchange, removing", console=0, log=1, telegram=0)
+                        messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and confirmed not closed, removing anyway", console=0, log=1, telegram=0)
+                    elif hasClosingTrade is None:
+                        # Cannot determine status due to API issues - be conservative
+                        if isOldPosition:
+                            # Only remove very old positions when we can't determine status
+                            symbolsToRemove.append(symbol)
+                            symbolsToNotify.append(symbol)
+                            messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and status undetermined due to API issues, removing", console=0, log=1, telegram=0)
+                        else:
+                            # Keep recent positions when status is undetermined
+                            messages(f"[DEBUG] Position {symbol} status undetermined due to API issues, keeping for safety (age: {timeSinceOpen/3600:.1f}h)", console=0, log=1, telegram=0)
                     else:
+                        # hasClosingTrade is False and not old position
                         messages(f"[DEBUG] Position {symbol} not found on exchange but no closing trades found, keeping for safety", console=0, log=1, telegram=0)
                 
                 # Send notifications for closed positions before removing them
@@ -962,21 +974,28 @@ class OrderManager:
         """
         Helper method to check if TP or SL orders have been executed
         Uses the same logic as checkForClosingTrade but returns boolean
-        Returns True if any closing order is executed, False otherwise
+        Returns True if any closing order is executed, False otherwise, None if cannot determine
         """
         try:
             if not tpOrderId and not slOrderId:
                 messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, using fallback method", pair=symbol, console=0, log=1, telegram=0)
                 return self._checkForClosingTradesFallback(symbol)
             
+            tpAccessible = False
+            slAccessible = False
+            tpExecuted = False
+            slExecuted = False
+            
             # Check Take Profit order status
             if tpOrderId:
                 try:
                     tpOrder = self.exchange.fetch_order(tpOrderId, symbol)
+                    tpAccessible = True
                     tpStatus = tpOrder.get('status', 'unknown')
                     messages(f"[DEBUG] TP order {tpOrderId} status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if tpStatus in ['closed', 'filled', 'executed']:
+                        tpExecuted = True
                         messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         # Save closing order details for P/L calculation
                         position = self.positions.get(symbol, {})
@@ -999,16 +1018,26 @@ class OrderManager:
                         messages(f"[DEBUG] Saved TP closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
-                    messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+                    error_msg = str(e).lower()
+                    if "order not exist" in error_msg or "80016" in error_msg:
+                        # Order doesn't exist - could mean it was executed and cleaned up, or cancelled
+                        # We can't be sure, so we need more verification
+                        messages(f"[DEBUG] TP order {tpOrderId} not found for {symbol} - order may have been executed or cancelled: {e}", pair=symbol, console=0, log=1, telegram=0)
+                        tpAccessible = False
+                    else:
+                        messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+                        tpAccessible = False
             
             # Check Stop Loss order status
             if slOrderId:
                 try:
                     slOrder = self.exchange.fetch_order(slOrderId, symbol)
+                    slAccessible = True
                     slStatus = slOrder.get('status', 'unknown')
                     messages(f"[DEBUG] SL order {slOrderId} status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
                     
                     if slStatus in ['closed', 'filled', 'executed']:
+                        slExecuted = True
                         messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         # Save closing order details for P/L calculation
                         position = self.positions.get(symbol, {})
@@ -1031,20 +1060,37 @@ class OrderManager:
                         messages(f"[DEBUG] Saved SL closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
                         return True
                 except Exception as e:
-                    messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+                    error_msg = str(e).lower()
+                    if "order not exist" in error_msg or "80016" in error_msg:
+                        # Order doesn't exist - could mean it was executed and cleaned up, or cancelled
+                        messages(f"[DEBUG] SL order {slOrderId} not found for {symbol} - order may have been executed or cancelled: {e}", pair=symbol, console=0, log=1, telegram=0)
+                        slAccessible = False
+                    else:
+                        messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+                        slAccessible = False
             
-            messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+            # If we couldn't access either order due to API issues, return None (undetermined)
+            if not tpAccessible and not slAccessible:
+                messages(f"[DEBUG] Cannot access any orders for {symbol} due to API issues - status undetermined", pair=symbol, console=0, log=1, telegram=0)
+                return None
+            
+            # If we can access at least one order and neither is executed, position is still open
+            if not tpExecuted and not slExecuted:
+                messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                return False
+                
             return False
                 
         except Exception as e:
             messages(f"[ERROR] Could not check closing orders for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+            return None
             return False
 
     def checkForClosingTrade(self, symbol):
         """
         Check if TP or SL orders have been executed to confirm position closure
         Uses specific order IDs from the position data for precise verification
-        Returns True if any closing order is executed, False otherwise
+        Returns True if any closing order is executed, False if confirmed open, None if undetermined
         """
         position = self.positions.get(symbol, {})
         tpOrderId = position.get('tpOrderId1')
