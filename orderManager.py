@@ -367,9 +367,16 @@ class OrderManager:
         closeTsUnix = int(time.time())
         closeTsIso  = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S")
         try:
-            dtOpen = datetime.fromisoformat(tsOpenIso)
-            openTsUnix = int(dtOpen.timestamp())
-        except:
+            # Handle the timestamp format used in position records: "2025-09-04 00-19-10"
+            if tsOpenIso:
+                # Convert from "2025-09-04 00-19-10" to "2025-09-04 00:19:10" for ISO parsing
+                tsOpenIsoFormatted = tsOpenIso.replace('-', ':', 2).replace('-', ':', 1)
+                dtOpen = datetime.fromisoformat(tsOpenIsoFormatted)
+                openTsUnix = int(dtOpen.timestamp())
+            else:
+                openTsUnix = closeTsUnix
+        except Exception as e:
+            messages(f"[DEBUG] Failed to parse timestamp '{tsOpenIso}': {e}", console=0, log=1, telegram=0)
             openTsUnix = closeTsUnix
         elapsed = closeTsUnix - openTsUnix
 
@@ -1192,6 +1199,9 @@ class OrderManager:
                     message = (f"{pnlSign} {side} {cleanSymbol} {orderType} P/L: {pnlUsdt:.2f} USDT ({pnlOnInvestment:.2f}%) Investment: {investment} USDT (x{leverage})")
                     
                     messages(message, pair=symbol, console=1, log=1, telegram=1)
+                    
+                    # Log the trade to trades.csv
+                    self.logTradeFromPosition(symbol, position, orderType, pnlUsdt)
                     
                     # Update selectionLog with close data
                     try:
