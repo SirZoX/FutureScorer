@@ -485,7 +485,7 @@ def analyzePairs():
                         plotting.savePlot({**item, 'plotPath': plotPath})
                         caption = (
                             f"{symbolNorm}\n"
-                            f"Investment: {configData['usdcInvestment']} USDC ({investmentPct*100:.0f}%)\n"
+                            f"Investment: {usdcInvestment:.1f} USDC (x{configData['leverage']})\n"
                             f"Entry Price: {record['openPrice']}\n"
                             f"TP: {record['tpPrice']}\n"
                             f"SL: {record['slPrice']}"
