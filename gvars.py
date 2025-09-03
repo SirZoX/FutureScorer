@@ -34,3 +34,16 @@ threadPoolMaxWorkers = 10                   # increased from 5 to 10 workers for
 
 clientPrefix = "SCBot_"
 _line_ = "*"*120
+
+# Position monitor table column widths
+columnWidthHour = 19           # Hour column width
+columnWidthPair = 20           # Pair column width  
+columnWidthSide = 6            # Side column width (L/S)
+columnWidthTpPercent = 10      # TP% column width
+columnWidthSlPercent = 10      # SL% column width
+columnWidthPnlPercent = 12     # PNL% column width
+columnWidthInvestment = 12     # Investment column width
+columnWidthEntryPrice = 10     # Entry price column width
+columnWidthTpPrice = 10        # TP price column width
+columnWidthSlPrice = 10        # SL price column width
+columnWidthLiveFor = 12        # Live for column width

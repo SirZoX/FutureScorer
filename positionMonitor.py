@@ -5,6 +5,11 @@ import os
 import sys
 import threading
 import re
+from gvars import (
+    columnWidthHour, columnWidthPair, columnWidthSide, columnWidthTpPercent,
+    columnWidthSlPercent, columnWidthPnlPercent, columnWidthInvestment,
+    columnWidthEntryPrice, columnWidthTpPrice, columnWidthSlPrice, columnWidthLiveFor
+)
 
 # Global variables for rate limiting
 lastApiCall = 0
@@ -259,7 +264,7 @@ def fmtNum(num, maxInt=5, maxDec=6, width=None):
         return formatted
 
 def fmtSymbol(symbol):
-    return symbol.ljust(20)[:20]  # Reduced from 25 to 20 for better fit
+    return symbol.ljust(columnWidthPair)[:columnWidthPair]  # Use gvars width for pair column
 
 def fmtTimeDelta(seconds):
     td = timedelta(seconds=seconds)
@@ -310,8 +315,8 @@ def printPositionsTable():
                 time.sleep(0.2)
         except Exception:
             tickers = {}
-    # Updated header with Long/Short column and properly aligned
-    header = f"{'Hour':19} | {'Pair':20} | {'side':6} | {'TP%':7} | {'SL%':7} | {'PNL%':12} | {'Investment':12} | {'EntryPrice':10} | {'TP':10} | {'SL':10} | {'Live for':12}"
+    # Updated header with Long/Short column and properly aligned using gvars widths
+    header = f"{'Hour':{columnWidthHour}} | {'Pair':{columnWidthPair}} | {'side':{columnWidthSide}} | {'TP%':{columnWidthTpPercent-3}} | {'SL%':{columnWidthSlPercent-3}} | {'PNL%':{columnWidthPnlPercent}} | {'Investment':{columnWidthInvestment}} | {'EntryPrice':{columnWidthEntryPrice}} | {'TP':{columnWidthTpPrice}} | {'SL':{columnWidthSlPrice}} | {'Live for':{columnWidthLiveFor}}"
     print()
     print('-'*len(header))
     print(header)
@@ -335,10 +340,10 @@ def printPositionsTable():
             float(pos.get('slPrice', 0))
         )
         invest = openPrice * amount
-        investStr = fmtNum(invest, 5, 4, 12)  # Width 12 for Investment column
-        openPriceStr = fmtNum(openPrice, 5, 5, 10)  # Width 10 for EntryPrice column
-        tpPriceStr = fmtNum(tpPrice, 5, 5, 10)  # Width 10 for TP column
-        slPriceStr = fmtNum(slPrice, 5, 5, 10)  # Width 10 for SL column
+        investStr = fmtNum(invest, 5, 4, columnWidthInvestment)  # Investment column
+        openPriceStr = fmtNum(openPrice, 5, 5, columnWidthEntryPrice)  # EntryPrice column
+        tpPriceStr = fmtNum(tpPrice, 5, 5, columnWidthTpPrice)  # TP column
+        slPriceStr = fmtNum(slPrice, 5, 5, columnWidthSlPrice)  # SL column
         entryTs = int(pos.get('open_ts_unix', now))
         delta = now - entryTs
         deltaStr = fmtTimeDelta(delta)
@@ -351,8 +356,8 @@ def printPositionsTable():
             float(pos.get('slPercent2')) if pos.get('slPercent2') not in (None, 0, '', 'null') else
             float(pos.get('slPercent', 0))
         )
-        tpPercentStr = colorText(f"{tpPercent:4.1f}" if tpPercent is not None else ' --', 'green', 10)
-        slPercentStr = colorText(f"{slPercent:4.1f}" if slPercent is not None else ' --', 'red', 10)
+        tpPercentStr = colorText(f"{tpPercent:4.1f}" if tpPercent is not None else ' --', 'green', columnWidthTpPercent)
+        slPercentStr = colorText(f"{slPercent:4.1f}" if slPercent is not None else ' --', 'red', columnWidthSlPercent)
         # Get current price from ticker
         ticker = tickers.get(pos.get('symbol', ''), {})
         currentPrice = ticker.get('last', openPrice)
@@ -376,7 +381,7 @@ def printPositionsTable():
             else:
                 pctColor = 'red'
         hora = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-        print(f"{hora:19} | {symbol:20} | {sideStr:6} | {tpPercentStr} | {slPercentStr} | {colorText(pctStr, pctColor, 12)} | {investStr} | {openPriceStr} | {tpPriceStr} | {slPriceStr} | {deltaStr:>12}")
+        print(f"{hora:{columnWidthHour}} | {symbol:{columnWidthPair}} | {sideStr:{columnWidthSide}} | {tpPercentStr} | {slPercentStr} | {colorText(pctStr, pctColor, columnWidthPnlPercent)} | {investStr} | {openPriceStr} | {tpPriceStr} | {slPriceStr} | {deltaStr:>{columnWidthLiveFor}}")
 
 def monitorPositions():
     from logManager import messages
