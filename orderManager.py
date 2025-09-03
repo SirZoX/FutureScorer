@@ -1094,18 +1094,27 @@ class OrderManager:
             
             # Check if we have closing order details saved
             closingOrder = position.get('closingOrder')
+            messages(f"[DEBUG] Checking closingOrder for {symbol}: {closingOrder}", pair=symbol, console=0, log=1, telegram=0)
+            
             if closingOrder:
                 # Use saved closing order details for P/L calculation
-                closePrice = float(closingOrder.get('price', 0)) if closingOrder.get('price') is not None else 0
+                rawPrice = closingOrder.get('price')
+                messages(f"[DEBUG] Raw price from closingOrder: {rawPrice} (type: {type(rawPrice)})", pair=symbol, console=0, log=1, telegram=0)
+                
+                closePrice = float(rawPrice) if rawPrice is not None else 0
                 closedAmount = float(closingOrder.get('amount', 0))
                 orderType = closingOrder.get('type', 'Unknown')
+                
+                messages(f"[DEBUG] Processed values - closePrice: {closePrice}, amount: {closedAmount}, type: {orderType}", pair=symbol, console=0, log=1, telegram=0)
                 
                 # If we don't have closePrice from order, try to use the target price from position
                 if not closePrice:
                     if orderType == 'TP':
                         closePrice = float(position.get('tpPrice', 0))
+                        messages(f"[DEBUG] Using TP price as fallback: {closePrice}", pair=symbol, console=0, log=1, telegram=0)
                     elif orderType == 'SL':
                         closePrice = float(position.get('slPrice', 0))
+                        messages(f"[DEBUG] Using SL price as fallback: {closePrice}", pair=symbol, console=0, log=1, telegram=0)
                 
                 if closePrice and closedAmount:
                     # Calculate P/L
