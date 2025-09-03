@@ -461,7 +461,8 @@ def analyzePairs():
         if not rejected:
             # 5e) Open position with investmentPct
             # Preparar para quitar ReduceOnly en modo Hedge (debe hacerse en orderManager/connector)
-            record = orderManager.openPosition(opp["pair"], slope=opp.get("slope"), intercept=opp.get("intercept"), investmentPct=investmentPct)
+            side = opp.get("type", "long")  # Get side from opportunity type (long/short)
+            record = orderManager.openPosition(opp["pair"], slope=opp.get("slope"), intercept=opp.get("intercept"), investmentPct=investmentPct, side=side)
             if record:
                 nuevasAbiertas += 1
                 accepted = 1

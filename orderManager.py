@@ -1131,12 +1131,9 @@ class OrderManager:
                     
                     # Format message
                     cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
-                    pnlSign = "✅" if pnlUsdt >= 0 else "❌"
+                    pnlSign = "💰💰💰" if pnlUsdt >= 0 else "❌"
                     
-                    message = (f"{pnlSign} {cleanSymbol} {orderType} ejecutado\n"
-                              f"💰 P/L: {pnlUsdt:.2f} USDT ({pnlOnInvestment:.2f}%)\n"
-                              f"📊 Precio: {openPrice} → {closePrice}\n"
-                              f"💎 Inversión: {investment} USDT (x{leverage})")
+                    message = (f"{pnlSign} {side} {cleanSymbol} {orderType} P/L: {pnlUsdt:.2f} USDT ({pnlOnInvestment:.2f}%) Investment: {investment} USDT (x{leverage})")
                     
                     messages(message, pair=symbol, console=1, log=1, telegram=1)
                     position['notified'] = True
