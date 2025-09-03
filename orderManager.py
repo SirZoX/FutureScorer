@@ -970,10 +970,17 @@ class OrderManager:
                         messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         # Save closing order details for P/L calculation
                         position = self.positions.get(symbol, {})
+                        
+                        # Try to get the actual execution price
+                        actualPrice = tpOrder.get('average') or tpOrder.get('price')
+                        if actualPrice is None:
+                            # If no price in order, try to get from position's TP price
+                            actualPrice = position.get('tpPrice')
+                        
                         position['closingOrder'] = {
                             'type': 'TP',
                             'orderId': tpOrderId,
-                            'price': tpOrder.get('average') or tpOrder.get('price'),
+                            'price': actualPrice,
                             'amount': tpOrder.get('filled') or tpOrder.get('amount'),
                             'fee': tpOrder.get('fee', {}),
                             'timestamp': tpOrder.get('timestamp') or int(time.time() * 1000)
@@ -995,10 +1002,17 @@ class OrderManager:
                         messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
                         # Save closing order details for P/L calculation
                         position = self.positions.get(symbol, {})
+                        
+                        # Try to get the actual execution price
+                        actualPrice = slOrder.get('average') or slOrder.get('price')
+                        if actualPrice is None:
+                            # If no price in order, try to get from position's SL price
+                            actualPrice = position.get('slPrice')
+                        
                         position['closingOrder'] = {
                             'type': 'SL',
                             'orderId': slOrderId,
-                            'price': slOrder.get('average') or slOrder.get('price'),
+                            'price': actualPrice,
                             'amount': slOrder.get('filled') or slOrder.get('amount'),
                             'fee': slOrder.get('fee', {}),
                             'timestamp': slOrder.get('timestamp') or int(time.time() * 1000)
@@ -1082,9 +1096,16 @@ class OrderManager:
             closingOrder = position.get('closingOrder')
             if closingOrder:
                 # Use saved closing order details for P/L calculation
-                closePrice = float(closingOrder.get('price', 0))
+                closePrice = float(closingOrder.get('price', 0)) if closingOrder.get('price') is not None else 0
                 closedAmount = float(closingOrder.get('amount', 0))
                 orderType = closingOrder.get('type', 'Unknown')
+                
+                # If we don't have closePrice from order, try to use the target price from position
+                if not closePrice:
+                    if orderType == 'TP':
+                        closePrice = float(position.get('tpPrice', 0))
+                    elif orderType == 'SL':
+                        closePrice = float(position.get('slPrice', 0))
                 
                 if closePrice and closedAmount:
                     # Calculate P/L
@@ -1112,6 +1133,8 @@ class OrderManager:
                     position['notified'] = True
                     self.positions[symbol] = position
                     return
+                else:
+                    messages(f"[DEBUG] Missing price data for {symbol}: closePrice={closePrice}, amount={closedAmount}", pair=symbol, console=0, log=1, telegram=0)
             
             # Fallback: try to get trades from exchange
             try:

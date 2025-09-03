@@ -28,6 +28,23 @@ def log_warning(message, **kwargs):
 def log_trade(message, **kwargs):
     messages(message, console=1, log=1, telegram=1)
 
+# Función de diagnóstico temporal
+def diagnosticTelegram():
+    """Diagnostic function to test Telegram configuration"""
+    print(f"[DIAGNOSTIC] Telegram Token present: {bool(_telegramToken)}")
+    print(f"[DIAGNOSTIC] Telegram Chat ID present: {bool(_telegramChatId)}")
+    if _telegramToken and _telegramChatId:
+        print(f"[DIAGNOSTIC] Token starts with: {_telegramToken[:10]}...")
+        print(f"[DIAGNOSTIC] Chat ID: {_telegramChatId}")
+        # Test message
+        try:
+            messages("🔧 Test message from FutureScorer diagnostics", console=1, log=1, telegram=1)
+            print("[DIAGNOSTIC] Test message sent successfully")
+        except Exception as e:
+            print(f"[DIAGNOSTIC] Error sending test message: {e}")
+    else:
+        print("[DIAGNOSTIC] Missing Telegram credentials")
+
 # ——— Configuración de Telegram ———
 try:
     _cfg = configManager.config
