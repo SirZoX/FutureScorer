@@ -247,11 +247,12 @@ def _validateBounce(line, lows, highs, closes, opens, n, tolerancePct):
     lineType = line['type']
     
     if lineType == 'long':  # Support validation
-        # Last two candles must be above the line
-        if lows[-1] < lineExp[-1] or lows[-2] < lineExp[-2]:
+        # Last two candles must be above the line (allow some tolerance)
+        tolerance = abs(lineExp[-1]) * tolerancePct
+        if lows[-1] < lineExp[-1] - tolerance or lows[-2] < lineExp[-2] - tolerance:
             return False
         
-        # Check for bounce: touch + 2 green candles
+        # Check for bounce: touch + at least 1 green candle (more lenient)
         hasTouchToSupport = False
         for k in range(max(0, n-3), n):
             if (lows[k] <= lineExp[k] and 
@@ -259,10 +260,12 @@ def _validateBounce(line, lows, highs, closes, opens, n, tolerancePct):
                 hasTouchToSupport = True
                 break
         
-        hasGreenBounce = (closes[-1] > opens[-1] and closes[-2] > opens[-2])
+        # More lenient bounce condition: at least 1 green candle
+        hasGreenBounce = (closes[-1] > opens[-1] or closes[-2] > opens[-2])
         bounce = hasTouchToSupport and hasGreenBounce
         
-        if line['ratioAbove'] > 1 - 0.02 and bounce:  # closeViolationPct = 0.02
+        # More lenient ratio requirement
+        if line['ratioAbove'] > 1 - 0.05 and bounce:  # Relaxed from 0.02 to 0.05
             line['bounce'] = bounce
             line['hasTouchToSupport'] = hasTouchToSupport
             line['hasGreenBounce'] = hasGreenBounce

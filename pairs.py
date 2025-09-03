@@ -239,10 +239,13 @@ def analyzePairs():
             distancePct = distance / lineExp[last] if lineExp[last] else 0
             volumeRatio = volTouch / avgVol
             momentum    = (df["close"].iat[last] - df["close"].iat[prev]) / df["close"].iat[prev] if df["close"].iat[prev] else 0
+            # For LONG positions, positive momentum is good (price going up)
+            # For SHORT positions, negative momentum is good (price going down)
+            momentumScore = momentum if opp['type'] == 'long' else -momentum
             score = (
                 scoringWeights["distance"] * (1 - distancePct) +
                 scoringWeights["volume"]   * min(volumeRatio, 2) +
-                scoringWeights["momentum"] * max(momentum, 0) +
+                scoringWeights["momentum"] * max(momentumScore, 0) +
                 scoringWeights["touches"]  * min(opp['touchCount'] / minTouches, 1)
             )
             results.append({
@@ -538,6 +541,7 @@ def analyzePairs():
             tsIso,
             str(tsUnix),
             symbolNorm,
+            opp.get("type", "long"),  # Add position type for better tracking
             helpers.fmt(opp["distancePct"], 6),
             helpers.fmt(opp["volumeRatio"], 6),
             helpers.fmt(opp["momentum"], 6),
