@@ -335,6 +335,8 @@ class OrderManager:
         Busca la línea con coincidencia exacta de id y actualiza los campos de cierre.
         Si no la encuentra, lo loguea. Solo reescribe si se actualizó.
         """
+        messages(f"[DEBUG] annotateSelectionLog called with orderIdentifier='{orderIdentifier}'", console=0, log=1, telegram=0)
+        
         # ...existing code...
         rows = []
         updated = False
@@ -342,6 +344,8 @@ class OrderManager:
             reader = csv.DictReader(f, delimiter=';')
             fieldnames = reader.fieldnames or []
             rows = list(reader)
+
+        messages(f"[DEBUG] Read {len(rows)} rows from selectionLog", console=0, log=1, telegram=0)
 
         extras = ['profitQuote', 'profitPct', 'close_ts_iso', 'close_ts_unix', 'time_to_close_s']
         for key in extras:
@@ -360,6 +364,7 @@ class OrderManager:
         for row in rows:
             row_id = (row.get('id') or '').strip()
             if row_id == orderIdentifier:
+                messages(f"[DEBUG] Found matching row for id='{orderIdentifier}', updating close data", console=0, log=1, telegram=0)
                 row['profitQuote']     = f"{profitQuote:.6f}"
                 row['profitPct']       = f"{profitPct:.2f}"
                 row['close_ts_iso']    = closeTsIso
@@ -369,12 +374,15 @@ class OrderManager:
                 break
 
         if updated:
+            messages(f"[DEBUG] Writing updated selectionLog with close data for id='{orderIdentifier}'", console=0, log=1, telegram=0)
             with open(selectionLogFile, 'w', encoding='utf-8', newline='') as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=';')
                 writer.writeheader()
                 writer.writerows(rows)
         else:
-            messages(f"[ERROR] No se encontró la línea con id={orderIdentifier} para actualizar cierre en selectionLog.csv", console=1, log=1, telegram=1)
+            # Log first few row IDs for debugging
+            sample_ids = [row.get('id', 'NO_ID') for row in rows[:5]]
+            messages(f"[ERROR] No se encontró la línea con id='{orderIdentifier}' para actualizar cierre en selectionLog.csv. Sample IDs: {sample_ids}", console=1, log=1, telegram=1)
 
     def logTrade(self, symbol: str, openDate: str, closeDate: str, elapsed: str, investmentUsdt: float, leverage: int, netProfitUsdt: float):
         """
@@ -671,6 +679,7 @@ class OrderManager:
                 # Comentar el uso antiguo y dejar nota
                 # recordId = f"{tpOrderId or ''}-{slOrderId or ''}"
                 recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
+                messages(f"[DEBUG] Attempting to annotate selectionLog for {symbol}: recordId='{recordId}', profit={profitQuote:.4f}, pct={profitPct:.2f}", pair=symbol, console=0, log=1, telegram=0)
                 self.annotateSelectionLog(recordId, profitQuote, profitPct, tsOpenIso)
                 
                 # Log the trade to trades.csv
