@@ -124,6 +124,32 @@ def analyzePairs():
     # Leer config en caliente
     configData = configManager.config
 
+    # ——— Control de posiciones máximas ———
+    # Check current opened positions before starting analysis
+    maxOpenPositions = configData.get('maxOpenPositions', 8)
+    try:
+        with open(gvars.positionsFile, encoding="utf-8") as f:
+            currentPositions = json.load(f)
+        
+        # Support both formats: old list or new dict
+        if isinstance(currentPositions, dict):
+            currentPositionsCount = len(currentPositions)
+        elif isinstance(currentPositions, list):
+            currentPositionsCount = len([p for p in currentPositions if isinstance(p, dict) and p.get("symbol")])
+        else:
+            currentPositionsCount = 0
+    except Exception as e:
+        currentPositionsCount = 0
+        messages(f"Error reading openedPositions.json: {e}", console=0, log=1, telegram=0)
+
+    if currentPositionsCount >= maxOpenPositions:
+        messages(f"⚠️  Maximum positions reached ({currentPositionsCount}/{maxOpenPositions}). Skipping analysis to save resources.", console=1, log=1, telegram=1)
+        messages("Analysis cancelled - all position slots are occupied", console=1, log=1, telegram=0)
+        monitorActive.set()  # Reactiva el monitor
+        return []  # Return empty list to indicate no analysis was performed
+
+    messages(f"Current positions: {currentPositionsCount}/{maxOpenPositions}. Starting analysis...", console=1, log=1, telegram=0)
+
     # Core parameters
     # topPercent   = configData.get('topPercent', 10)
     # limit        = configData.get('limit', 150)
