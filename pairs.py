@@ -176,7 +176,7 @@ def analyzePairs():
     def processPair(pair):
         import time
         # Reduced sleep time for better performance - BingX can handle more requests
-        time.sleep(0.12)  # Reduced from 0.21s to 0.12s (saves ~50ms per pair)
+        time.sleep(gvars.pairAnalysisSleepTime)  # Centralized sleep time configuration
         rate_limiter.acquire()
         try:
             ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, requestedCandles)
@@ -667,7 +667,7 @@ def updatePairs():
 
     # Mensaje informativo antes de analizar
     numHilos = gvars.threadPoolMaxWorkers
-    sleepSeg = 0.21
+    sleepSeg = gvars.pairAnalysisSleepTime
     messages(f"Using {numHilos} threads with {sleepSeg}s sleeping between each one", console=1, log=1, telegram=0, pair="")
 
     # Guardar selección
