@@ -450,15 +450,31 @@ def analyzePairs():
         else:
             try:
                 df = pd.read_csv(opp["csvPath"])
-                idx_n1 = -2
+                
+                # Get the last two candles for validation (N-1 and N-2)
+                idx_n1 = -1  # Most recent candle
+                idx_n2 = -2  # Second most recent candle
+                
                 close_n1 = df["close"].iloc[idx_n1]
                 open_n1 = df["open"].iloc[idx_n1]
                 low_n1 = df["low"].iloc[idx_n1]
+                
+                close_n2 = df["close"].iloc[idx_n2]
+                open_n2 = df["open"].iloc[idx_n2]
+                
                 soporte_n1 = opp["slope"] * (len(df) + idx_n1) + opp["intercept"]
-                # Only the last candle (N-1) must be green
+                
+                # Both last candles (N-1 and N-2) must be same color: both green OR both red
                 currentValidation = 3
-                if not (close_n1 > open_n1):
-                    messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}): N-1 not green", console=0, log=1, telegram=0, pair=opp['pair'])
+                
+                isN1Green = close_n1 > open_n1
+                isN2Green = close_n2 > open_n2
+                
+                # Check if both candles are the same color
+                if not ((isN1Green and isN2Green) or (not isN1Green and not isN2Green)):
+                    color_n1 = "green" if isN1Green else "red"
+                    color_n2 = "green" if isN2Green else "red"
+                    messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}): N-1={color_n1}, N-2={color_n2} (must be same color)", console=0, log=1, telegram=0, pair=opp['pair'])
                     rejected = True
                 # N-1 must touch or pierce the support line
                 if not rejected:
