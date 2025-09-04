@@ -1,9 +1,57 @@
 import json
 import time
+import csv
 from datetime import datetime
 from logManager import messages
-from gvars import positionsFile
+from gvars import positionsFile, selectionLogFile
 from cacheManager import cachedCall
+
+def getSelectionLogData(symbol, tradeDateTime):
+    """
+    Search for position data in selectionLog.csv based on symbol and approximate time
+    Returns dict with tpPrice, slPrice, slope, intercept if found
+    """
+    try:
+        # Convert trade datetime to unix timestamp for comparison
+        if tradeDateTime:
+            if 'T' in tradeDateTime and 'Z' in tradeDateTime:
+                # Format: 2025-08-24T13:00:24.000Z
+                tradeTime = datetime.fromisoformat(tradeDateTime.replace('Z', '+00:00'))
+            else:
+                # Try other formats
+                tradeTime = datetime.fromisoformat(tradeDateTime)
+            
+            tradeTimestamp = int(tradeTime.timestamp())
+            
+            # Search in selectionLog.csv (last 100 entries for performance)
+            with open(selectionLogFile, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                
+            # Check last 100 entries (most recent first)
+            for line in reversed(lines[-100:]):
+                if symbol in line and 'accepted;1' in line:  # Only accepted positions
+                    parts = line.strip().split(';')
+                    if len(parts) >= 20:  # Ensure we have enough columns
+                        try:
+                            logSymbol = parts[3]  # pair column
+                            logTimestamp = int(parts[2])  # timestamp_unix column
+                            
+                            # Check if symbol matches and time is within 2 hours
+                            if logSymbol == symbol and abs(logTimestamp - tradeTimestamp) < 7200:
+                                return {
+                                    'tpPrice': float(parts[16].replace(',', '.')) if parts[16] not in ['0,000000', '0.000000', '0', ''] else None,
+                                    'slPrice': float(parts[17].replace(',', '.')) if parts[17] not in ['0,000000', '0.000000', '0', ''] else None,
+                                    'slope': float(parts[13].replace(',', '.')) if parts[13] else None,
+                                    'intercept': float(parts[14].replace(',', '.')) if parts[14] else None
+                                }
+                        except (ValueError, IndexError):
+                            continue
+        
+        return None
+        
+    except Exception as e:
+        messages(f"[SYNC] Error reading selectionLog for {symbol}: {e}", console=0, log=1, telegram=0)
+        return None
 
 def checkPositionDiscrepancies(orderManager):
     """
@@ -46,15 +94,32 @@ def checkPositionDiscrepancies(orderManager):
 def reconstructMissingPositions(orderManager, missingSymbols):
     """
     Attempt to reconstruct missing positions from exchange data and recent trades
+    Enhanced to get more data from selectionLog and avoid constant reconstructions
     """
     if not missingSymbols:
         return True
     
-    messages(f"[SYNC] Attempting to reconstruct {len(missingSymbols)} missing positions: {missingSymbols}", console=1, log=1, telegram=1)
+    # Reduce telegram noise - only log to console and file
+    messages(f"[SYNC] Attempting to reconstruct {len(missingSymbols)} missing positions: {missingSymbols}", console=1, log=1, telegram=0)
     
     reconstructed = 0
     for symbol in missingSymbols:
         try:
+            # Check if position was already marked as reconstructed recently
+            try:
+                with open(positionsFile, encoding='utf-8') as f:
+                    existingPositions = json.load(f)
+                if symbol in existingPositions and existingPositions[symbol].get('reconstructed'):
+                    # Skip if already reconstructed recently (within last hour)
+                    reconstructDate = existingPositions[symbol].get('reconstruction_date', '')
+                    if reconstructDate:
+                        reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
+                        if (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() < 3600:
+                            messages(f"[SYNC] Skipping {symbol} - already reconstructed recently", console=0, log=1, telegram=0)
+                            continue
+            except Exception:
+                pass
+            
             # Get current position from exchange
             exchangePositions = orderManager.exchange.fetch_positions([symbol])
             currentPosition = None
@@ -80,17 +145,36 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                         break
                 
                 if openingTrade:
-                    # Reconstruct position data
+                    # Try to get additional data from selectionLog
+                    selectionData = getSelectionLogData(symbol, openingTrade.get('datetime', ''))
+                    
+                    # Reconstruct position data with enhanced info
                     positionData = {
                         'symbol': symbol,
                         'amount': str(openingTrade.get('amount', 0)),
                         'openPrice': str(openingTrade.get('price', 0)),
                         'timestamp': openingTrade.get('datetime', datetime.utcnow().isoformat()),
                         'open_ts_unix': int(openingTrade.get('timestamp', time.time()) / 1000),
-                        'side': 'long',  # Assuming long positions
+                        'side': 'LONG',  # Assuming long positions
                         'reconstructed': True,
                         'reconstruction_date': datetime.utcnow().isoformat()
                     }
+                    
+                    # Add selectionLog data if found
+                    if selectionData:
+                        positionData.update({
+                            'tpPrice': selectionData.get('tpPrice'),
+                            'slPrice': selectionData.get('slPrice'),
+                            'slope': selectionData.get('slope'),
+                            'intercept': selectionData.get('intercept'),
+                            'leverage': 20,  # Default leverage
+                            'investment_usdt': 70.0,  # Default investment
+                            'tpPercent': 12.0,
+                            'slPercent': 30.0
+                        })
+                        messages(f"[SYNC] Enhanced reconstruction with selectionLog data for {symbol}", console=0, log=1, telegram=0)
+                    else:
+                        messages(f"[SYNC] Basic reconstruction for {symbol} - selectionLog data not found", console=0, log=1, telegram=0)
                     
                     # Add to local positions
                     try:
@@ -127,25 +211,29 @@ def syncPositions(orderManager):
     """
     localCount, exchangeCount, missingInLocal, extraInLocal = checkPositionDiscrepancies(orderManager)
     
-    # Log status
-    messages(f"[SYNC] Position status: Local={localCount}, Exchange={exchangeCount}", console=1, log=1, telegram=0)
+    # Log status (reduced verbosity)
+    messages(f"[SYNC] Position status: Local={localCount}, Exchange={exchangeCount}", console=0, log=1, telegram=0)
     
     # Handle discrepancies
     hasDiscrepancies = False
     
     if missingInLocal:
         hasDiscrepancies = True
-        messages(f"[SYNC] Missing in local: {missingInLocal}", console=1, log=1, telegram=1)
+        # Only send telegram for significant discrepancies (>2 positions)
+        telegramLevel = 1 if len(missingInLocal) > 2 else 0
+        messages(f"[SYNC] Missing in local: {missingInLocal}", console=1, log=1, telegram=telegramLevel)
         reconstructMissingPositions(orderManager, missingInLocal)
     
     if extraInLocal:
         hasDiscrepancies = True
-        messages(f"[SYNC] Extra in local (will be cleaned by updatePositions): {extraInLocal}", console=1, log=1, telegram=0)
+        messages(f"[SYNC] Extra in local (will be cleaned by updatePositions): {extraInLocal}", console=0, log=1, telegram=0)
         # Let the normal updatePositions() handle closing these
         orderManager.updatePositions()
     
     if not hasDiscrepancies:
-        messages(f"[SYNC] Positions in sync: {localCount} positions", console=0, log=1, telegram=0)
+        # Only log this occasionally (every 6th sync = 30 minutes)
+        if int(time.time()) % 1800 < 300:  # Only during first 5 minutes of each 30-min period
+            messages(f"[SYNC] Positions in sync: {localCount} positions", console=0, log=1, telegram=0)
     
     return not hasDiscrepancies
 
