@@ -114,11 +114,11 @@ def analyzePairs():
 
     # ——— 0) Limpiar carpeta de plots ———
     fileManager.deleteOldFiles(json=False, csv=True, plots=True)
-    from positionMonitor import monitorActive
+    # from positionMonitor import monitorActive  # Disabled - position monitor removed
     import time
     startTime = time.time()
     messages("Starting analysis", console=1, log=1, telegram=0)
-    monitorActive.clear()  # Pausa el monitor
+    # monitorActive.clear()  # Disabled - position monitor removed
     dateTag = datetime.utcnow().date().isoformat()
 
     # Leer config en caliente
@@ -143,9 +143,9 @@ def analyzePairs():
         messages(f"Error reading openedPositions.json: {e}", console=0, log=1, telegram=0)
 
     if currentPositionsCount >= maxOpenPositions:
-        messages(f"⚠️  Maximum positions reached ({currentPositionsCount}/{maxOpenPositions}). Skipping analysis to save resources.", console=1, log=1, telegram=1)
+        messages(f"⚠️  Maximum positions reached ({currentPositionsCount}/{maxOpenPositions}). Skipping analysis to save resources.", console=1, log=1, telegram=0)
         messages("Analysis cancelled - all position slots are occupied", console=1, log=1, telegram=0)
-        monitorActive.set()  # Reactiva el monitor
+        # monitorActive.set()  # Disabled - position monitor removed
         return []  # Return empty list to indicate no analysis was performed
 
     messages(f"Current positions: {currentPositionsCount}/{maxOpenPositions}. Starting analysis...", console=1, log=1, telegram=0)
@@ -601,7 +601,7 @@ def analyzePairs():
     elapsed = endTime - startTime
     messages(f"End processing. Elapsed: {elapsed:.2f}s", console=1, log=1, telegram=0)
     messages(gvars._line_, console=1, log=1, telegram=0)
-    monitorActive.set()  # Reactiva el monitor
+    # monitorActive.set()  # Disabled - position monitor removed
 
     # Log of pairs found in openedPositions.json (log only)
     try:

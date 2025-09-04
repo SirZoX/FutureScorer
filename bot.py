@@ -1,7 +1,7 @@
 print ("\r\n\r\n")
 import threading
-import positionMonitor
-from positionMonitor import monitorActive
+# import positionMonitor  # Disabled - removed from main flow
+# from positionMonitor import monitorActive  # Disabled - removed from main flow
 import os
 import sys
 import schedule
@@ -10,9 +10,9 @@ from datetime import datetime
 # Import messages early so it's available from the start
 from logManager import messages
 
-def startPositionMonitor():
-    t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
-    t.start()
+# def startPositionMonitor():  # Disabled - position monitoring removed
+#     t = threading.Thread(target=positionMonitor.monitorPositions, daemon=True)
+#     t.start()
 
 # bot.py
 import time
@@ -304,15 +304,15 @@ if __name__ == "__main__":
     if forceRun:
         messages("Force flag detected: running initial update & analysis", console=1, log=1, telegram=0)
         pairs.updatePairs()
-        monitorActive.clear()  # Pausa el monitor antes de análisis
+        # monitorActive.clear()  # Disabled - position monitor removed
         pairs.analyzePairs()
-        monitorActive.set()    # Reactiva el monitor después de análisis
-        positionMonitor.printPositionsTable()
-        startPositionMonitor()
+        # monitorActive.set()    # Disabled - position monitor removed
+        # positionMonitor.printPositionsTable()  # Disabled - position monitor removed
+        # startPositionMonitor()  # Disabled - position monitor removed
     else:
         messages("Skipping initial update & analysis (use -force to override)", console=1, log=1, telegram=0)
         # Arrancar monitor de posiciones en hilo solo después de cargar todo
-        startPositionMonitor()
+        # startPositionMonitor()  # Disabled - position monitor removed
 
     setupSchedules(timeframe)
     schedule.every(3).minutes.do(safeUpdatePositions)

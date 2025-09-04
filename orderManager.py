@@ -14,6 +14,7 @@ from logManager import messages
 from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
 from cacheManager import cachedCall
+from apiOptimizer import getOptimizedPositions
 from notificationManager import notifyPositionClosure, notifyPositionClosureSimple
 
 from datetime import datetime
@@ -76,6 +77,10 @@ class OrderManager:
 
         # Reconcile local JSON with exchange state
         self.updatePositions()
+        
+        # Initialize API optimizer for caching
+        from apiOptimizer import initializeApiOptimizer
+        initializeApiOptimizer(self.exchange)
 
     def fetchOrderWithRetry(self, orderId, symbol, maxRetries=3, delay=2):
         """
@@ -104,8 +109,44 @@ class OrderManager:
 
     def getExchangeOpenPositions(self, maxRetries=3, retryDelay=2):
         """
-        Get currently open positions from the exchange with enhanced retry logic
+        Get currently open positions from the exchange with optimized caching
         Returns a set of symbols with open positions
+        """
+        try:
+            # Use cached positions with 60-second TTL to reduce API calls
+            positions = cachedCall(
+                "exchange_positions_orderManager", 
+                self.exchange.fetch_positions, 
+                ttl=60
+            )
+            
+            openSymbols = set()
+            messages(f"[DEBUG] Exchange returned {len(positions)} positions (cached)", console=0, log=1, telegram=0)
+            
+            for pos in positions:
+                symbol = pos.get('symbol', '')
+                contracts = float(pos.get('contracts', 0))
+                side = pos.get('side', '')
+                notional = pos.get('notional', 0)
+                unrealizedPnl = pos.get('unrealizedPnl', 0)
+                
+                messages(f"[DEBUG] Position: {symbol} contracts={contracts} side={side} notional={notional} pnl={unrealizedPnl}", console=0, log=1, telegram=0)
+                
+                if contracts > 0:  # Position has contracts
+                    openSymbols.add(symbol)
+                    messages(f"[DEBUG] Added {symbol} to open positions", console=0, log=1, telegram=0)
+            
+            messages(f"[DEBUG] Final open symbols: {openSymbols} (cached)", console=0, log=1, telegram=0)
+            return openSymbols
+            
+        except Exception as e:
+            # Fallback to direct API call with retry logic if caching fails
+            messages(f"[WARNING] Cached positions failed, falling back to direct API: {e}", console=0, log=1, telegram=0)
+            return self._getExchangeOpenPositionsDirectly(maxRetries, retryDelay)
+    
+    def _getExchangeOpenPositionsDirectly(self, maxRetries=3, retryDelay=2):
+        """
+        Fallback method for direct API calls with retry logic
         """
         consecutiveZeroResults = 0
         

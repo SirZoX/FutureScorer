@@ -22,5 +22,7 @@
 - NEVER create test files in the robot structure. Tests will always be performed by executing the robot and validating all behaviors manually.
 - Make always a single sentence with git add, git commit and git push
 - After the git commands, never show a explanation of the changes
+- Never use GREP
+- Use always powershell commands if possible
 
 You may copy this file to any project to enforce these universal AI coding standards.

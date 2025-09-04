@@ -316,7 +316,7 @@ def printPositionsTable():
         except Exception:
             tickers = {}
     # Updated header with Long/Short column and properly aligned using gvars widths
-    header = f"{'Hour':{columnWidthHour}} | {'Pair':{columnWidthPair}} | {'side':{columnWidthSide}} | {'TP%':{columnWidthTpPercent-3}} | {'SL%':{columnWidthSlPercent-3}} | {'PNL%':{columnWidthPnlPercent}} | {'Investment':{columnWidthInvestment}} | {'EntryPrice':{columnWidthEntryPrice}} | {'TP':{columnWidthTpPrice}} | {'SL':{columnWidthSlPrice}} | {'Live for':{columnWidthLiveFor}}"
+    header = f"{'Hour':{columnWidthHour}} | {'Pair':{columnWidthPair}} | {'side':{columnWidthSide}} | {'TP%':{columnWidthTpPercent}} | {'SL%':{columnWidthSlPercent}} | {'PNL%':{columnWidthPnlPercent}} | {'Investment':{columnWidthInvestment}} | {'EntryPrice':{columnWidthEntryPrice}} | {'TP':{columnWidthTpPrice}} | {'SL':{columnWidthSlPrice}} | {'Live for':{columnWidthLiveFor}}"
     print()
     print('-'*len(header))
     print(header)
