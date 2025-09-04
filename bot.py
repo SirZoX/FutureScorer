@@ -318,6 +318,15 @@ if __name__ == "__main__":
     schedule.every(3).minutes.do(safeUpdatePositions)
     schedule.every().day.at("00:00").do(orderManager.updateDailyBalance)
     schedule.every(10).seconds.do(helpers.checkTelegram)
+    
+    # Schedule position synchronization every 5 minutes
+    from positionSyncer import schedulePositionSync
+    positionSyncFunction = schedulePositionSync(orderManager, intervalMinutes=5)
+    schedule.every(5).minutes.do(positionSyncFunction)
+    
+    # Set orderManager reference for telegram commands
+    import helpers
+    helpers.setOrderManagerReference(orderManager)
 
     while True:
         schedule.run_pending()
