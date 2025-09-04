@@ -215,7 +215,7 @@ def syncOpenedPositions():
         om.updatePositions()
         messages("[SYNC] Position synchronization completed", console=0, log=1, telegram=0)
     except Exception as e:
-        messages(f"[SYNC] Error during position synchronization: {e}", console=1, log=1, telegram=1)
+        messages(f"[SYNC] Error during position synchronization: {e}", console=1, log=1, telegram=0)
 
 # Global event to control monitor execution
 monitorActive = threading.Event()
@@ -402,7 +402,7 @@ def monitorPositions():
         try:
             syncOpenedPositions()  # Sincroniza y limpia el fichero antes de mostrar la tabla
         except Exception as e:
-            messages(f"[SYNC] Error ejecutando syncOpenedPositions: {e}", console=1, log=1, telegram=1)
+            messages(f"[SYNC] Error ejecutando syncOpenedPositions: {e}", console=1, log=1, telegram=0)
         
         printPositionsTable()
         

@@ -189,7 +189,7 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                         json.dump(positions, f, indent=2)
                     
                     reconstructed += 1
-                    messages(f"[SYNC] Reconstructed position {symbol} from opening trade at {positionData['openPrice']}", console=1, log=1, telegram=1)
+                    messages(f"[SYNC] Reconstructed position {symbol} from opening trade at {positionData['openPrice']}", console=1, log=1, telegram=0)
                     
                 else:
                     messages(f"[SYNC] Could not find opening trade for {symbol}", console=1, log=1, telegram=0)
@@ -201,7 +201,7 @@ def reconstructMissingPositions(orderManager, missingSymbols):
             messages(f"[SYNC] Error reconstructing position {symbol}: {e}", console=1, log=1, telegram=0)
     
     if reconstructed > 0:
-        messages(f"[SYNC] Successfully reconstructed {reconstructed} positions", console=1, log=1, telegram=1)
+        messages(f"[SYNC] Successfully reconstructed {reconstructed} positions", console=1, log=1, telegram=0)
     
     return reconstructed > 0
 
@@ -219,9 +219,8 @@ def syncPositions(orderManager):
     
     if missingInLocal:
         hasDiscrepancies = True
-        # Only send telegram for significant discrepancies (>2 positions)
-        telegramLevel = 1 if len(missingInLocal) > 2 else 0
-        messages(f"[SYNC] Missing in local: {missingInLocal}", console=1, log=1, telegram=telegramLevel)
+        # No telegram messages for SYNC - only console and log
+        messages(f"[SYNC] Missing in local: {missingInLocal}", console=1, log=1, telegram=0)
         reconstructMissingPositions(orderManager, missingInLocal)
     
     if extraInLocal:
@@ -246,7 +245,7 @@ def schedulePositionSync(orderManager, intervalMinutes=5):
         try:
             syncPositions(orderManager)
         except Exception as e:
-            messages(f"[SYNC] Error in scheduled sync: {e}", console=1, log=1, telegram=1)
+            messages(f"[SYNC] Error in scheduled sync: {e}", console=1, log=1, telegram=0)
     
     return runSync
 
