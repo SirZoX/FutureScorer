@@ -345,13 +345,28 @@ class OrderManager:
                 self.savePositionsDict(migrated)
                 data = migrated
             
-            # Ensure all positions have 'side' field
+            # Ensure all positions have 'side' field and remove duplicate orderIds
             if isinstance(data, dict):
+                needs_save = False
                 for symbol, position in data.items():
+                    # Add side field if missing
                     if 'side' not in position:
                         # Infer side from amount (positive = LONG, negative = SHORT)
                         amount = position.get('amount', 0)
                         position['side'] = 'LONG' if amount >= 0 else 'SHORT'
+                        needs_save = True
+                    
+                    # Remove duplicate orderIds (without numbers) if they exist
+                    if 'tpOrderId' in position and 'tpOrderId1' in position:
+                        position.pop('tpOrderId', None)
+                        needs_save = True
+                    if 'slOrderId' in position and 'slOrderId1' in position:
+                        position.pop('slOrderId', None)
+                        needs_save = True
+                
+                # Save the cleaned data if any changes were made
+                if needs_save:
+                    self.savePositionsDict(data)
         
         return data if isinstance(data, dict) else {}
 
@@ -613,9 +628,6 @@ class OrderManager:
             slOrderId2 = position.get('slOrderId2')
             tpOrderId1 = position.get('tpOrderId1')
             slOrderId1 = position.get('slOrderId1')
-            # Comentar los campos antiguos (deprecados)
-            # tpOrderId    = position.get('tpOrderId')
-            # slOrderId    = position.get('slOrderId')
             notified     = position.get('notified', False)
             tpStatus = slStatus = None
             tpInfo = slInfo = None
@@ -982,8 +994,6 @@ class OrderManager:
             'slPrice':   float(slPrice),
             'tpOrderId1': tpId,
             'slOrderId1': slId,
-            'tpOrderId': tpId,  # Additional field as requested
-            'slOrderId': slId,  # Additional field as requested
             'timestamp': datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S"),
             'open_ts_unix': int(time.time()),
             'slope': slope if slope is not None else 0,
