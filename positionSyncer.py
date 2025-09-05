@@ -261,9 +261,9 @@ def syncPositions(orderManager):
     
     if extraInLocal:
         hasDiscrepancies = True
-        messages(f"[SYNC] Extra in local (will be cleaned by updatePositions): {extraInLocal}", console=0, log=1, telegram=0)
-        # Let the normal updatePositions() handle closing these
-        orderManager.updatePositions()
+        messages(f"[SYNC] Extra in local (will be cleaned by updatePositions in next cycle): {extraInLocal}", console=0, log=1, telegram=0)
+        # Let the normal scheduled updatePositions() handle closing these
+        # Do NOT call updatePositions() here as it interferes with just-reconstructed positions
     
     if not hasDiscrepancies:
         # Only log this occasionally (every 6th sync = 30 minutes)

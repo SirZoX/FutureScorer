@@ -115,7 +115,7 @@ class OrderManager:
         try:
             # Use cached positions with 60-second TTL to reduce API calls
             positions = cachedCall(
-                "exchange_positions_orderManager", 
+                "exchange_positions_syncer", 
                 self.exchange.fetch_positions, 
                 ttl=60
             )
