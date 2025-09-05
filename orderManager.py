@@ -647,7 +647,7 @@ class OrderManager:
             if activeTpOrderId:
                 try:
                     tpOrder = self.exchange.fetch_order(activeTpOrderId, symbol)
-                    if tpOrder.get('status') == 'FILLED':
+                    if tpOrder.get('status') in ['FILLED', 'closed']:
                         close_reason = 'TP'
                 except:
                     pass
@@ -655,7 +655,7 @@ class OrderManager:
             if close_reason == 'UNKNOWN' and activeSlOrderId:
                 try:
                     slOrder = self.exchange.fetch_order(activeSlOrderId, symbol)
-                    if slOrder.get('status') == 'FILLED':
+                    if slOrder.get('status') in ['FILLED', 'closed']:
                         close_reason = 'SL'
                 except:
                     pass
@@ -1054,7 +1054,7 @@ class OrderManager:
     def _checkOrderStatusForClosure(self, symbol, tpOrderId, slOrderId):
         """
         Check if TP or SL orders have been executed by checking their status directly
-        Uses BingX API status 'FILLED' to determine actual execution
+        Uses BingX API status 'FILLED' or 'closed' to determine actual execution
         Returns True if any order is executed, False if none are executed, None if API issues
         """
         try:
@@ -1099,9 +1099,9 @@ class OrderManager:
                 messages(f"[DEBUG] Cannot access any orders for {symbol} due to API issues - status undetermined", pair=symbol, console=0, log=1, telegram=0)
                 return None
             
-            # Check which order was actually filled (executed) - use exact BingX status
-            tpFilled = tpOrder and tpOrder.get('status') == 'FILLED'
-            slFilled = slOrder and slOrder.get('status') == 'FILLED'
+            # Check which order was actually filled (executed) - accept both BingX statuses
+            tpFilled = tpOrder and tpOrder.get('status') in ['FILLED', 'closed']
+            slFilled = slOrder and slOrder.get('status') in ['FILLED', 'closed']
             
             # Determine which order was executed and save closing details
             if tpFilled and not slFilled:
