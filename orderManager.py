@@ -238,6 +238,19 @@ class OrderManager:
                         symbolsToRemove.append(symbol)
                         continue
                     
+                    # Protection for recently reconstructed positions - give them time to stabilize
+                    if position.get('reconstructed', False):
+                        reconstructDate = position.get('reconstruction_date', '')
+                        if reconstructDate:
+                            try:
+                                reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
+                                reconstructAgeHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
+                                if reconstructAgeHours < 2:  # Give 2 hours grace period
+                                    messages(f"[DEBUG] Position {symbol} is recently reconstructed ({reconstructAgeHours:.1f}h ago), skipping cleanup", console=0, log=1, telegram=0)
+                                    continue
+                            except Exception as e:
+                                messages(f"[DEBUG] Error parsing reconstruction date for {symbol}: {e}", console=0, log=1, telegram=0)
+                    
                     # Check for closing trades to confirm the position is actually closed
                     hasClosingTrade = self.checkForClosingTrade(symbol)
                     

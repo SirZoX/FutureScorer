@@ -6,6 +6,34 @@ from logManager import messages
 from gvars import positionsFile, selectionLogFile
 from cacheManager import cachedCall
 
+# Global cache to track recently reconstructed positions
+_recently_reconstructed = {}
+
+def isRecentlyReconstructed(symbol, maxAgeHours=2):
+    """
+    Check if a symbol was recently reconstructed to avoid infinite loops
+    """
+    global _recently_reconstructed
+    
+    if symbol in _recently_reconstructed:
+        reconstructTime = _recently_reconstructed[symbol]
+        ageHours = (time.time() - reconstructTime) / 3600
+        if ageHours < maxAgeHours:
+            return True
+    
+    return False
+
+def markAsReconstructed(symbol):
+    """
+    Mark a symbol as recently reconstructed
+    """
+    global _recently_reconstructed
+    _recently_reconstructed[symbol] = time.time()
+    
+    # Clean old entries (older than 4 hours)
+    cutoff = time.time() - (4 * 3600)
+    _recently_reconstructed = {k: v for k, v in _recently_reconstructed.items() if v > cutoff}
+
 def getSelectionLogData(symbol, tradeDateTime):
     """
     Search for position data in selectionLog.csv based on symbol and approximate time
@@ -105,6 +133,11 @@ def reconstructMissingPositions(orderManager, missingSymbols):
     reconstructed = 0
     for symbol in missingSymbols:
         try:
+            # Check global cache first to avoid rapid reconstructions
+            if isRecentlyReconstructed(symbol):
+                messages(f"[SYNC] Skipping {symbol} - recently reconstructed (global cache)", console=0, log=1, telegram=0)
+                continue
+            
             # Check if position was already marked as reconstructed recently
             try:
                 with open(positionsFile, encoding='utf-8') as f:
@@ -187,6 +220,9 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                     
                     with open(positionsFile, 'w', encoding='utf-8') as f:
                         json.dump(positions, f, indent=2)
+                    
+                    # Mark as reconstructed in global cache
+                    markAsReconstructed(symbol)
                     
                     reconstructed += 1
                     messages(f"[SYNC] Reconstructed position {symbol} from opening trade at {positionData['openPrice']}", console=1, log=1, telegram=0)
