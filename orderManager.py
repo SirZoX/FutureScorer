@@ -4,6 +4,7 @@ import json
 import os
 import csv
 import time
+import threading
 from datetime import datetime
 
 from logManager import messages
@@ -26,6 +27,10 @@ from zoneinfo import ZoneInfo
 
 class OrderManager:
     def __init__(self, isSandbox=False):
+        # Initialize thread locks for file operations
+        self.positions_lock = threading.Lock()
+        self.file_lock = threading.Lock()
+        
         # Load config and credentials
         try:
             self.config = configManager.config
@@ -326,26 +331,27 @@ class OrderManager:
         Si el archivo está en formato antiguo (lista), lo migra automáticamente.
         Añade el campo 'side' si no existe.
         """
-        try:
-            with open(positionsFile, encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception as e:
-            messages(f"Error loading positions: {e}", console=1, log=1, telegram=0)
-            data = {}
-        
-        # Si es lista (formato antiguo), migrar a dict
-        if isinstance(data, list):
-            migrated = {item['symbol']: item for item in data if 'symbol' in item}
-            self.savePositionsDict(migrated)
-            data = migrated
-        
-        # Ensure all positions have 'side' field
-        if isinstance(data, dict):
-            for symbol, position in data.items():
-                if 'side' not in position:
-                    # Infer side from amount (positive = LONG, negative = SHORT)
-                    amount = position.get('amount', 0)
-                    position['side'] = 'LONG' if amount >= 0 else 'SHORT'
+        with self.file_lock:
+            try:
+                with open(positionsFile, encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception as e:
+                messages(f"Error loading positions: {e}", console=1, log=1, telegram=0)
+                data = {}
+            
+            # Si es lista (formato antiguo), migrar a dict
+            if isinstance(data, list):
+                migrated = {item['symbol']: item for item in data if 'symbol' in item}
+                self.savePositionsDict(migrated)
+                data = migrated
+            
+            # Ensure all positions have 'side' field
+            if isinstance(data, dict):
+                for symbol, position in data.items():
+                    if 'side' not in position:
+                        # Infer side from amount (positive = LONG, negative = SHORT)
+                        amount = position.get('amount', 0)
+                        position['side'] = 'LONG' if amount >= 0 else 'SHORT'
         
         return data if isinstance(data, dict) else {}
 
@@ -353,21 +359,23 @@ class OrderManager:
         """
         Guarda self.positions (dict) en el archivo JSON.
         """
-        try:
-            with open(positionsFile, 'w', encoding='utf-8') as f:
-                json.dump(self.positions, f, indent=2, default=str)
-        except Exception as e:
-            messages(f"Error saving positions: {e}", console=1, log=1, telegram=0)
+        with self.file_lock:
+            try:
+                with open(positionsFile, 'w', encoding='utf-8') as f:
+                    json.dump(self.positions, f, indent=2, default=str)
+            except Exception as e:
+                messages(f"Error saving positions: {e}", console=1, log=1, telegram=0)
 
     def savePositionsDict(self, positions_dict):
         """
         Guarda un dict de posiciones en el archivo JSON.
         """
-        try:
-            with open(positionsFile, 'w', encoding='utf-8') as f:
-                json.dump(positions_dict, f, indent=2, default=str)
-        except Exception as e:
-            messages(f"Error saving positions: {e}", console=1, log=1, telegram=0)
+        with self.file_lock:
+            try:
+                with open(positionsFile, 'w', encoding='utf-8') as f:
+                    json.dump(positions_dict, f, indent=2, default=str)
+            except Exception as e:
+                messages(f"Error saving positions: {e}", console=1, log=1, telegram=0)
 
     def loadDailyBalance(self):
         today = datetime.utcnow().date().isoformat()
@@ -585,10 +593,16 @@ class OrderManager:
         
         symbols_to_remove = []
         for symbol, position in self.positions.items():
-            # Skip if already notified to prevent duplicate notifications
-            if position.get('notified', False):
-                symbols_to_remove.append(symbol)
-                continue
+            # Thread-safe check for notification status
+            with self.positions_lock:
+                # Re-check after acquiring lock to prevent race conditions
+                current_position = self.positions.get(symbol, {})
+                if current_position.get('notified', False):
+                    symbols_to_remove.append(symbol)
+                    continue
+                # Mark as being processed to prevent other threads from processing the same position
+                current_position['processing_notification'] = True
+                self.positions[symbol] = current_position
                 
             buyQuantity  = float(position.get('amount', 0))
             buyPrice     = float(position.get('openPrice', 0))
@@ -758,14 +772,19 @@ class OrderManager:
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, close_reason, profitQuote)
                 
-                position['notified'] = True
+                with self.positions_lock:
+                    position['notified'] = True
+                    position.pop('processing_notification', None)  # Clean up processing flag
+                    self.positions[symbol] = position
                 # Marcar para eliminar del dict
                 symbols_to_remove.append(symbol)
                 continue
             except Exception as e:
                 messages(f"[ERROR] Telegram/log failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
-                position['notified'] = False
-                self.positions[symbol] = position
+                with self.positions_lock:
+                    position['notified'] = False
+                    position.pop('processing_notification', None)  # Clean up processing flag
+                    self.positions[symbol] = position
                 continue
         # Eliminar solo los símbolos cerrados
         for symbol in symbols_to_remove:
@@ -786,22 +805,28 @@ class OrderManager:
         Never open more than one trade for the same symbol per run.
         """
         messages(f"[DEBUG] symbol recibido: {symbol}", console=0, log=1, telegram=0)
-        # 0) If we've already flagged insufficient balance, skip
-        if self.hadInsufficientBalance:
-            binSym = symbol.replace('/', '')
-            return None
+        
+        # Thread-safe check for duplicate positions
+        with self.positions_lock:
+            # 0) If we've already flagged insufficient balance, skip
+            if self.hadInsufficientBalance:
+                binSym = symbol.replace('/', '')
+                return None
 
-        # 1) Refresh and reconcile open positions
-        self.updatePositions()
-        if symbol in self.positions:
-            #messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
-            return None
+            # 1) Refresh and reconcile open positions
+            self.updatePositions()
+            if symbol in self.positions:
+                messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
+                return None
 
-        # 1.2) Skip if we've hit the maxOpen limit
-        if len(self.positions) >= self.maxOpen:
-            messages(f"Skipping openPosition for {symbol}: max open positions reached ({self.maxOpen})", console=1, log=1, telegram=0, pair=symbol)
-            return None
-
+            # 1.2) Skip if we've hit the maxOpen limit
+            if len(self.positions) >= self.maxOpen:
+                messages(f"Skipping openPosition for {symbol}: max open positions reached ({self.maxOpen})", console=1, log=1, telegram=0, pair=symbol)
+                return None
+            
+            # Reserve the symbol to prevent other threads from opening the same position
+            self.positions[symbol] = {'status': 'opening', 'timestamp': datetime.now().isoformat()}
+        
         # 2) Check free balance in baseAsset (e.g. USDC)
         free = self.exchange.fetch_free_balance()
         availableUSDC = float(free.get(self.baseAsset, 0) or 0)
@@ -814,6 +839,9 @@ class OrderManager:
             else:
                 self.hadInsufficientBalance = True
                 messages(f"Skipping openPosition for {symbol}: insufficient balance {availableUSDC:.6f} USDC, need {investUSDC:.6f} USDC", console=1, log=1, telegram=0, pair=symbol )
+                # Clean up reservation
+                with self.positions_lock:
+                    self.positions.pop(symbol, None)
                 return None
 
         # 3) Fetch current market price
@@ -824,6 +852,9 @@ class OrderManager:
                 raise ValueError(f"Invalid price for {symbol}: {price}")
         except Exception as e:
             messages(f"Error fetching price for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
+            # Clean up reservation
+            with self.positions_lock:
+                self.positions.pop(symbol, None)
             return None
 
         # 4) Compute how much base asset to buy
@@ -876,6 +907,9 @@ class OrderManager:
             messages(f"  ➡️   Futures order executed for {symbol}: side={side}, filled={filled}, price={openPrice}, leverage={leverage}", pair=symbol, console=1, log=1, telegram=0)
         except Exception as e:
             messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
+            # Clean up reservation
+            with self.positions_lock:
+                self.positions.pop(symbol, None)
             return None
 
         # 6) Calculate TP/SL teniendo en cuenta el leverage y side
@@ -1218,8 +1252,10 @@ class OrderManager:
                 cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
                 simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync)"
                 messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
-                position['notified'] = True
-                self.positions[symbol] = position
+                with self.positions_lock:
+                    position['notified'] = True
+                    position.pop('processing_notification', None)
+                    self.positions[symbol] = position
                 return
             
             # Check if we have closing order details saved
@@ -1287,8 +1323,10 @@ class OrderManager:
                     except Exception as annotate_error:
                         messages(f"[ERROR] Failed to annotate selectionLog for {symbol}: {annotate_error}", pair=symbol, console=0, log=1, telegram=0)
                     
-                    position['notified'] = True
-                    self.positions[symbol] = position
+                    with self.positions_lock:
+                        position['notified'] = True
+                        position.pop('processing_notification', None)
+                        self.positions[symbol] = position
                     return
                 else:
                     messages(f"[DEBUG] Missing price data for {symbol}: closePrice={closePrice}, amount={closedAmount}", pair=symbol, console=0, log=1, telegram=0)
@@ -1309,8 +1347,10 @@ class OrderManager:
                     cleanSymbol = symbol.replace('/USDT:USDT', '').replace('/', '_')
                     simpleMessage = f"Position closed: {cleanSymbol} (detected via exchange sync - no sell trades found)"
                     messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
-                    position['notified'] = True
-                    self.positions[symbol] = position
+                    with self.positions_lock:
+                        position['notified'] = True
+                        position.pop('processing_notification', None)
+                        self.positions[symbol] = position
                     return
                 
                 # Calculate average buy and sell prices
@@ -1405,8 +1445,10 @@ class OrderManager:
                 messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
             
             # Mark as notified
-            position['notified'] = True
-            self.positions[symbol] = position
+            with self.positions_lock:
+                position['notified'] = True
+                position.pop('processing_notification', None)
+                self.positions[symbol] = position
             
         except Exception as e:
             messages(f"[ERROR] Failed to notify closure for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
