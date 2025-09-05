@@ -211,7 +211,7 @@ def analyzePairs():
         try:
             # Use cached OHLCV data to reduce API calls
             cache_key = f"ohlcv_{pair}_{timeframe}_{requestedCandles}"
-            ohlcv = cachedCall(cache_key, exchange.fetch_ohlcv, ttl=300, args=(pair, timeframe, None, requestedCandles))
+            ohlcv = cachedCall(cache_key, exchange.fetch_ohlcv, 300, pair, timeframe, None, requestedCandles)
         except Exception as e:
             return {"pair": pair, "reason": f"OHLCV error: {e}"}
 
