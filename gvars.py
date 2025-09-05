@@ -29,8 +29,8 @@ rateLimiterMaxCalls = 20                    # max API calls per period
 rateLimiterPeriodSeconds = 1.0              # period length in seconds
 
 # Concurrency
-threadPoolMaxWorkers = 6                   # increased from 5 to 10 workers for faster analysis
-pairAnalysisSleepTime = 0.12               # Sleep time between pair analysis requests in seconds
+threadPoolMaxWorkers = 6                   # thread pool size for parallel processing
+pairAnalysisSleepTime = 0.05               # Reduced from 0.12 to 0.05 for better performance (50ms)
 
 
 clientPrefix = "SCBot_"

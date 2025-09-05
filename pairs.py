@@ -205,7 +205,9 @@ def analyzePairs():
         time.sleep(gvars.pairAnalysisSleepTime)  # Centralized sleep time configuration
         rate_limiter.acquire()
         try:
-            ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, requestedCandles)
+            # Use cached OHLCV data to reduce API calls
+            cache_key = f"ohlcv_{pair}_{timeframe}_{requestedCandles}"
+            ohlcv = cachedCall(cache_key, exchange.fetch_ohlcv, ttl=300, args=(pair, timeframe, None, requestedCandles))
         except Exception as e:
             return {"pair": pair, "reason": f"OHLCV error: {e}"}
 
@@ -292,7 +294,16 @@ def analyzePairs():
                 "bounceLow": lineExp[last] * (1 + minPctBounceAllowed),
                 "bounceHigh": lineExp[last] * (1 + maxPctBounceAllowed),
                 "ma25Prev": ma25Prev,
-                "ma99Prev": ma99Prev
+                "ma99Prev": ma99Prev,
+                # Add candle data to avoid CSV re-reading
+                "candleData": {
+                    "close_n1": df["close"].iat[last],
+                    "open_n1": df["open"].iat[last], 
+                    "low_n1": df["low"].iat[last],
+                    "close_n2": df["close"].iat[prev],
+                    "open_n2": df["open"].iat[prev],
+                    "candleCount": len(df)
+                }
             })
         return results
 
@@ -449,20 +460,29 @@ def analyzePairs():
             rejected = True
         else:
             try:
-                df = pd.read_csv(opp["csvPath"])
+                # Use pre-calculated candle data instead of reading CSV again
+                candleData = opp.get("candleData", {})
+                if not candleData:
+                    # Fallback to CSV if candleData is missing (shouldn't happen)
+                    df = pd.read_csv(opp["csvPath"])
+                    close_n1 = df["close"].iloc[-1]
+                    open_n1 = df["open"].iloc[-1]
+                    low_n1 = df["low"].iloc[-1]
+                    close_n2 = df["close"].iloc[-2]
+                    open_n2 = df["open"].iloc[-2]
+                    candleCount = len(df)
+                else:
+                    # Use pre-calculated data for better performance
+                    close_n1 = candleData["close_n1"]
+                    open_n1 = candleData["open_n1"]
+                    low_n1 = candleData["low_n1"]
+                    close_n2 = candleData["close_n2"]
+                    open_n2 = candleData["open_n2"]
+                    candleCount = candleData["candleCount"]
                 
-                # Get the last two candles for validation (N-1 and N-2)
+                # Calculate support line for N-1 candle
                 idx_n1 = -1  # Most recent candle
-                idx_n2 = -2  # Second most recent candle
-                
-                close_n1 = df["close"].iloc[idx_n1]
-                open_n1 = df["open"].iloc[idx_n1]
-                low_n1 = df["low"].iloc[idx_n1]
-                
-                close_n2 = df["close"].iloc[idx_n2]
-                open_n2 = df["open"].iloc[idx_n2]
-                
-                soporte_n1 = opp["slope"] * (len(df) + idx_n1) + opp["intercept"]
+                soporte_n1 = opp["slope"] * (candleCount + idx_n1) + opp["intercept"]
                 
                 # Both last candles (N-1 and N-2) must be same color: both green OR both red
                 currentValidation = 3
