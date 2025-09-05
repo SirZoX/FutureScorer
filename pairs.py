@@ -332,10 +332,11 @@ def analyzePairs():
                                     'intercept': r.get('intercept', 0),
                                     'type': 'discard'
                                 }
-                                try:
-                                    plotting.savePlot(item)
-                                except Exception as e:
-                                    messages(f"Error saving plot for {r['pair']}: {e}", console=0, log=1, telegram=0, pair=r['pair'])
+                                # Skip plot generation during analysis - will be generated asynchronously later
+                                # try:
+                                #     plotting.savePlot(item)
+                                # except Exception as e:
+                                #     messages(f"Error saving plot for {r['pair']}: {e}", console=0, log=1, telegram=0, pair=r['pair'])
                 else:
                     if 'score' in res:
                         opportunities.append(res)
@@ -350,10 +351,11 @@ def analyzePairs():
                                 'intercept': res.get('intercept', 0),
                                 'type': 'discard'
                             }
-                            try:
-                                plotting.savePlot(item)
-                            except Exception as e:
-                                messages(f"Error saving plot for {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
+                            # Skip plot generation during analysis - will be generated asynchronously later  
+                            # try:
+                            #     plotting.savePlot(item)
+                            # except Exception as e:
+                            #     messages(f"Error saving plot for {res['pair']}: {e}", console=0, log=1, telegram=0, pair=res['pair'])
 
     # 3) Sort by score descending
     ordered = sorted(opportunities, key=lambda o: o["score"], reverse=True)
