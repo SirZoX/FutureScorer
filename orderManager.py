@@ -878,14 +878,21 @@ class OrderManager:
             messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
             return None
 
-        # 6) Calculate TP/SL teniendo en cuenta el leverage
+        # 6) Calculate TP/SL teniendo en cuenta el leverage y side
         tpPct = Decimal(str(self.config.get('tp1', 0.02)))
         slPct = Decimal(str(self.config.get('sl1', 0.01)))
         leverage = int(self.config.get('leverage', 10))
         tpPctPrice = tpPct / Decimal(leverage)
         slPctPrice = slPct / Decimal(leverage)
-        rawTp = openPrice * (Decimal('1') + tpPctPrice)
-        rawSp = openPrice * (Decimal('1') - slPctPrice)
+        
+        # For LONG: TP above entry, SL below entry
+        # For SHORT: TP below entry, SL above entry
+        if side == 'long':
+            rawTp = openPrice * (Decimal('1') + tpPctPrice)
+            rawSp = openPrice * (Decimal('1') - slPctPrice)
+        else:  # short
+            rawTp = openPrice * (Decimal('1') - tpPctPrice)
+            rawSp = openPrice * (Decimal('1') + slPctPrice)
         tpPrice = (rawTp // tickSize) * tickSize if tickSize else rawTp
         slPrice = (rawSp // tickSize) * tickSize if tickSize else rawSp
         minPrice = Decimal(pf.get('minPrice','0'))
@@ -997,39 +1004,6 @@ class OrderManager:
             messages(f"[ERROR] No se pudo generar el plot para {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
         self.savePositions()
         return record
-
-        # 5) Place stop loss and take profit orders (futuros BingX)
-        # Solo si la orden principal se ejecutó correctamente
-        if order and order.get('status') == 'closed':
-            # Calcula precios de SL y TP según lógica del bot
-            stopLossPrice = round(price * (1 - stopLossPerc/100), 5) if side == 'long' else round(price * (1 + stopLossPerc/100), 5)
-            takeProfitPrice = round(price * (1 + takeProfitPerc/100), 5) if side == 'long' else round(price * (1 - takeProfitPerc/100), 5)
-            # Orden STOP_MARKET (stop loss)
-            try:
-                slOrder = self.connector.createOrder(
-                    symbol=symbol,
-                    type='STOP_MARKET',
-                    side='sell' if side == 'long' else 'buy',
-                    amount=amount,
-                    price=stopLossPrice,
-                    params={'stopPrice': stopLossPrice, 'reduceOnly': True}
-                )
-                messages(f"[INFO] Stop loss order creada: {slOrder}", log=1)
-            except Exception as e:
-                messages(f"[ERROR] Error creando stop loss: {e}", log=1)
-            # Orden TAKE_PROFIT_MARKET (take profit)
-            try:
-                tpOrder = self.connector.createOrder(
-                    symbol=symbol,
-                    type='TAKE_PROFIT_MARKET',
-                    side='sell' if side == 'long' else 'buy',
-                    amount=amount,
-                    price=takeProfitPrice,
-                    params={'stopPrice': takeProfitPrice, 'reduceOnly': True}
-                )
-                messages(f"[INFO] Take profit order creada: {tpOrder}", log=1)
-            except Exception as e:
-                messages(f"[ERROR] Error creando take profit: {e}", log=1)
 
     def _checkOrderStatusForClosure(self, symbol, tpOrderId, slOrderId):
         """
