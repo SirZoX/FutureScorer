@@ -948,6 +948,8 @@ class OrderManager:
             'slPrice':   float(slPrice),
             'tpOrderId1': tpId,
             'slOrderId1': slId,
+            'tpOrderId': tpId,  # Additional field as requested
+            'slOrderId': slId,  # Additional field as requested
             'timestamp': datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S"),
             'open_ts_unix': int(time.time()),
             'slope': slope if slope is not None else 0,
@@ -1125,34 +1127,46 @@ class OrderManager:
         """
         Check if TP or SL orders have been executed to confirm position closure
         Uses specific order IDs from the position data for precise verification
+        Falls back to trade search if order IDs are not available
         Returns True if any closing order is executed, False if confirmed open, None if undetermined
         """
         position = self.positions.get(symbol, {})
         tpOrderId = position.get('tpOrderId1')
         slOrderId = position.get('slOrderId1')
         
-        return self._checkOrderStatusForClosure(symbol, tpOrderId, slOrderId)
+        # If we have order IDs, use the precise method
+        if tpOrderId or slOrderId:
+            return self._checkOrderStatusForClosure(symbol, tpOrderId, slOrderId)
+        else:
+            # No order IDs available (likely failed to create TP/SL), use fallback
+            messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, using fallback method", pair=symbol, console=0, log=1, telegram=0)
+            return self._checkForClosingTradesFallback(symbol)
     
     def _checkForClosingTradesFallback(self, symbol):
         """
         Fallback method to check for closing trades when order IDs are not available
-        Uses the original trade search method
+        Uses the original trade search method with improved logic for both longs and shorts
         """
         try:
             position = self.positions.get(symbol, {})
             openTsUnix = position.get('open_ts_unix', 0)
+            positionSide = position.get('side', 'LONG').upper()
+            
+            # For LONG positions, closing trades are SELL
+            # For SHORT positions, closing trades are BUY
+            expectedClosingSide = 'sell' if positionSide == 'LONG' else 'buy'
             
             allTrades = self.exchange.fetch_my_trades(symbol)
             relevantTrades = [
                 t for t in allTrades
-                if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
+                if t.get('side') == expectedClosingSide and t.get('timestamp', 0) >= openTsUnix * 1000
             ]
             
             if relevantTrades:
-                messages(f"[DEBUG] Found {len(relevantTrades)} closing trades for {symbol} (fallback method)", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] Found {len(relevantTrades)} closing trades for {symbol} (fallback method, side={expectedClosingSide})", pair=symbol, console=0, log=1, telegram=0)
                 return True
             else:
-                messages(f"[DEBUG] No closing trades found for {symbol} (fallback method)", pair=symbol, console=0, log=1, telegram=0)
+                messages(f"[DEBUG] No closing trades found for {symbol} (fallback method, side={expectedClosingSide})", pair=symbol, console=0, log=1, telegram=0)
                 return False
                 
         except Exception as e:
