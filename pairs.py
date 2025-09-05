@@ -114,6 +114,10 @@ def analyzePairs():
 
     # ——— 0) Limpiar carpeta de plots ———
     fileManager.deleteOldFiles(json=False, csv=True, plots=True)
+    
+    # Initialize plot data storage for delayed generation
+    analyzePairs._plotData = []
+    
     # from positionMonitor import monitorActive  # Disabled - position monitor removed
     import time
     startTime = time.time()
@@ -582,10 +586,19 @@ def analyzePairs():
                 "slPrice": record["slPrice"]
                 # Do not add bouncePct or maxBounceAllowed, only the new fields
             })
-        try:
-            plotting.savePlot(itemAll)
-        except Exception as e:
-            messages(f"Error saving plot for {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
+        
+        # Only generate plots immediately for positions that were actually opened
+        # This saves significant time during analysis - other plots will be generated later
+        if record:  # Position was opened
+            try:
+                plotting.savePlot(itemAll)
+            except Exception as e:
+                messages(f"Error saving plot for opened position {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
+        
+        # Store data for post-analysis plot generation (for all opportunities)
+        if not hasattr(analyzePairs, '_plotData'):
+            analyzePairs._plotData = []
+        analyzePairs._plotData.append(itemAll)
 
         # ——— 7) Loguear en selectionLog.csv ———
         tpId = (record or {}).get("tpOrderId2") or (record or {}).get("tpOrderId1", "")
@@ -632,10 +645,35 @@ def analyzePairs():
             f.write(line)
 
 
-    # 8) Finish without deleting plots
+    # 8) Finish main processing
     endTime = time.time()
     elapsed = endTime - startTime
     messages(f"End processing. Elapsed: {elapsed:.2f}s", console=1, log=1, telegram=0)
+    
+    # 9) Generate plots for all opportunities asynchronously (non-blocking)
+    if hasattr(analyzePairs, '_plotData') and analyzePairs._plotData:
+        def generatePlotsAsync():
+            import threading
+            plotCount = len(analyzePairs._plotData)
+            messages(f"Starting asynchronous plot generation for {plotCount} opportunities", console=0, log=1, telegram=0)
+            plotStart = time.time()
+            
+            for plotData in analyzePairs._plotData:
+                try:
+                    plotting.savePlot(plotData)
+                except Exception as e:
+                    messages(f"Error generating delayed plot for {plotData.get('pair', 'unknown')}: {e}", console=0, log=1, telegram=0)
+            
+            plotElapsed = time.time() - plotStart
+            messages(f"Asynchronous plot generation completed. {plotCount} plots in {plotElapsed:.2f}s", console=0, log=1, telegram=0)
+            # Clear plot data after generation
+            analyzePairs._plotData = []
+        
+        # Start plot generation in background thread
+        plotThread = threading.Thread(target=generatePlotsAsync, daemon=True)
+        plotThread.start()
+        messages("Plot generation started in background thread", console=0, log=1, telegram=0)
+    
     messages(gvars._line_, console=1, log=1, telegram=0)
     # monitorActive.set()  # Disabled - position monitor removed
 
