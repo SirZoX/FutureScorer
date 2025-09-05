@@ -621,7 +621,7 @@ class OrderManager:
             if activeTpOrderId:
                 try:
                     tpOrder = self.exchange.fetch_order(activeTpOrderId, symbol)
-                    if tpOrder.get('status') in ['closed', 'filled', 'executed']:
+                    if tpOrder.get('status') == 'FILLED':
                         close_reason = 'TP'
                 except:
                     pass
@@ -629,7 +629,7 @@ class OrderManager:
             if close_reason == 'UNKNOWN' and activeSlOrderId:
                 try:
                     slOrder = self.exchange.fetch_order(activeSlOrderId, symbol)
-                    if slOrder.get('status') in ['closed', 'filled', 'executed']:
+                    if slOrder.get('status') == 'FILLED':
                         close_reason = 'SL'
                 except:
                     pass
@@ -1009,119 +1009,144 @@ class OrderManager:
 
     def _checkOrderStatusForClosure(self, symbol, tpOrderId, slOrderId):
         """
-        Helper method to check if TP or SL orders have been executed
-        Uses the same logic as checkForClosingTrade but returns boolean
-        Returns True if any closing order is executed, False otherwise, None if cannot determine
+        Check if TP or SL orders have been executed by checking their status directly
+        Uses BingX API status 'FILLED' to determine actual execution
+        Returns True if any order is executed, False if none are executed, None if API issues
         """
         try:
             if not tpOrderId and not slOrderId:
                 messages(f"[DEBUG] No TP/SL order IDs found for {symbol}, using fallback method", pair=symbol, console=0, log=1, telegram=0)
                 return self._checkForClosingTradesFallback(symbol)
             
-            tpAccessible = False
-            slAccessible = False
-            tpExecuted = False
-            slExecuted = False
+            tpOrder = None
+            slOrder = None
+            tpAccessible = True
+            slAccessible = True
             
-            # Check Take Profit order status
+            # Fetch both orders first to get complete information
             if tpOrderId:
                 try:
                     tpOrder = self.exchange.fetch_order(tpOrderId, symbol)
-                    tpAccessible = True
                     tpStatus = tpOrder.get('status', 'unknown')
                     messages(f"[DEBUG] TP order {tpOrderId} status: {tpStatus}", pair=symbol, console=0, log=1, telegram=0)
-                    
-                    if tpStatus in ['closed', 'filled', 'executed']:
-                        tpExecuted = True
-                        messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
-                        # Save closing order details for P/L calculation
-                        position = self.positions.get(symbol, {})
-                        
-                        # Try to get the actual execution price
-                        actualPrice = tpOrder.get('average') or tpOrder.get('price')
-                        if actualPrice is None:
-                            # If no price in order, try to get from position's TP price
-                            actualPrice = position.get('tpPrice')
-                        
-                        position['closingOrder'] = {
-                            'type': 'TP',
-                            'orderId': tpOrderId,
-                            'price': actualPrice,
-                            'amount': tpOrder.get('filled') or tpOrder.get('amount'),
-                            'fee': tpOrder.get('fee', {}),
-                            'timestamp': tpOrder.get('timestamp') or int(time.time() * 1000)
-                        }
-                        self.positions[symbol] = position
-                        messages(f"[DEBUG] Saved TP closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
-                        return True
                 except Exception as e:
                     error_msg = str(e).lower()
                     if "order not exist" in error_msg or "80016" in error_msg:
-                        # Order doesn't exist - could mean it was executed and cleaned up, or cancelled
-                        # We can't be sure, so we need more verification
                         messages(f"[DEBUG] TP order {tpOrderId} not found for {symbol} - order may have been executed or cancelled: {e}", pair=symbol, console=0, log=1, telegram=0)
-                        tpAccessible = False
                     else:
                         messages(f"[DEBUG] Could not fetch TP order {tpOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
-                        tpAccessible = False
+                    tpAccessible = False
             
-            # Check Stop Loss order status
             if slOrderId:
                 try:
                     slOrder = self.exchange.fetch_order(slOrderId, symbol)
-                    slAccessible = True
                     slStatus = slOrder.get('status', 'unknown')
                     messages(f"[DEBUG] SL order {slOrderId} status: {slStatus}", pair=symbol, console=0, log=1, telegram=0)
-                    
-                    if slStatus in ['closed', 'filled', 'executed']:
-                        slExecuted = True
-                        messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
-                        # Save closing order details for P/L calculation
-                        position = self.positions.get(symbol, {})
-                        
-                        # Try to get the actual execution price
-                        actualPrice = slOrder.get('average') or slOrder.get('price')
-                        if actualPrice is None:
-                            # If no price in order, try to get from position's SL price
-                            actualPrice = position.get('slPrice')
-                        
-                        position['closingOrder'] = {
-                            'type': 'SL',
-                            'orderId': slOrderId,
-                            'price': actualPrice,
-                            'amount': slOrder.get('filled') or slOrder.get('amount'),
-                            'fee': slOrder.get('fee', {}),
-                            'timestamp': slOrder.get('timestamp') or int(time.time() * 1000)
-                        }
-                        self.positions[symbol] = position
-                        messages(f"[DEBUG] Saved SL closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
-                        return True
                 except Exception as e:
                     error_msg = str(e).lower()
                     if "order not exist" in error_msg or "80016" in error_msg:
-                        # Order doesn't exist - could mean it was executed and cleaned up, or cancelled
                         messages(f"[DEBUG] SL order {slOrderId} not found for {symbol} - order may have been executed or cancelled: {e}", pair=symbol, console=0, log=1, telegram=0)
-                        slAccessible = False
                     else:
                         messages(f"[DEBUG] Could not fetch SL order {slOrderId} for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
-                        slAccessible = False
+                    slAccessible = False
             
             # If we couldn't access either order due to API issues, return None (undetermined)
             if not tpAccessible and not slAccessible:
                 messages(f"[DEBUG] Cannot access any orders for {symbol} due to API issues - status undetermined", pair=symbol, console=0, log=1, telegram=0)
                 return None
             
-            # If we can access at least one order and neither is executed, position is still open
-            if not tpExecuted and not slExecuted:
-                messages(f"[DEBUG] No closing orders executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
-                return False
+            # Check which order was actually filled (executed) - use exact BingX status
+            tpFilled = tpOrder and tpOrder.get('status') == 'FILLED'
+            slFilled = slOrder and slOrder.get('status') == 'FILLED'
+            
+            # Determine which order was executed and save closing details
+            if tpFilled and not slFilled:
+                # Take Profit was executed
+                messages(f"[INFO] Take Profit order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                position = self.positions.get(symbol, {})
                 
-            return False
+                # Get the actual execution price
+                actualPrice = tpOrder.get('average') or tpOrder.get('price')
+                if actualPrice is None:
+                    actualPrice = position.get('tpPrice')
+                
+                position['closingOrder'] = {
+                    'type': 'TP',
+                    'orderId': tpOrderId,
+                    'price': actualPrice,
+                    'amount': tpOrder.get('filled') or tpOrder.get('amount'),
+                    'fee': tpOrder.get('fee', {}),
+                    'timestamp': tpOrder.get('timestamp') or int(time.time() * 1000)
+                }
+                self.positions[symbol] = position
+                messages(f"[DEBUG] Saved TP closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
+                return True
+                
+            elif slFilled and not tpFilled:
+                # Stop Loss was executed
+                messages(f"[INFO] Stop Loss order executed for {symbol}", pair=symbol, console=0, log=1, telegram=0)
+                position = self.positions.get(symbol, {})
+                
+                # Get the actual execution price
+                actualPrice = slOrder.get('average') or slOrder.get('price')
+                if actualPrice is None:
+                    actualPrice = position.get('slPrice')
+                
+                position['closingOrder'] = {
+                    'type': 'SL',
+                    'orderId': slOrderId,
+                    'price': actualPrice,
+                    'amount': slOrder.get('filled') or slOrder.get('amount'),
+                    'fee': slOrder.get('fee', {}),
+                    'timestamp': slOrder.get('timestamp') or int(time.time() * 1000)
+                }
+                self.positions[symbol] = position
+                messages(f"[DEBUG] Saved SL closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
+                return True
+                
+            elif tpFilled and slFilled:
+                # Both orders filled - this shouldn't happen, but prioritize the one with most recent timestamp
+                messages(f"[WARNING] Both TP and SL orders appear filled for {symbol} - using most recent", pair=symbol, console=0, log=1, telegram=0)
+                tpTimestamp = tpOrder.get('timestamp', 0)
+                slTimestamp = slOrder.get('timestamp', 0)
+                
+                if tpTimestamp >= slTimestamp:
+                    # Use TP
+                    position = self.positions.get(symbol, {})
+                    actualPrice = tpOrder.get('average') or tpOrder.get('price') or position.get('tpPrice')
+                    position['closingOrder'] = {
+                        'type': 'TP',
+                        'orderId': tpOrderId,
+                        'price': actualPrice,
+                        'amount': tpOrder.get('filled') or tpOrder.get('amount'),
+                        'fee': tpOrder.get('fee', {}),
+                        'timestamp': tpTimestamp
+                    }
+                else:
+                    # Use SL
+                    position = self.positions.get(symbol, {})
+                    actualPrice = slOrder.get('average') or slOrder.get('price') or position.get('slPrice')
+                    position['closingOrder'] = {
+                        'type': 'SL',
+                        'orderId': slOrderId,
+                        'price': actualPrice,
+                        'amount': slOrder.get('filled') or slOrder.get('amount'),
+                        'fee': slOrder.get('fee', {}),
+                        'timestamp': slTimestamp
+                    }
+                
+                self.positions[symbol] = position
+                messages(f"[DEBUG] Saved closing order details for {symbol}: {position['closingOrder']}", pair=symbol, console=0, log=1, telegram=0)
+                return True
+            
+            else:
+                # Neither order is filled - position still open
+                messages(f"[DEBUG] No closing orders executed for {symbol} (TP: {tpOrder.get('status') if tpOrder else 'N/A'}, SL: {slOrder.get('status') if slOrder else 'N/A'})", pair=symbol, console=0, log=1, telegram=0)
+                return False
                 
         except Exception as e:
             messages(f"[ERROR] Could not check closing orders for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
             return None
-            return False
 
     def checkForClosingTrade(self, symbol):
         """

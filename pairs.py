@@ -453,7 +453,7 @@ def analyzePairs():
 
         # Attempt to open position according to filters
         rejected = False
-        totalValidations = 4  # Updated: Total number of validation steps (removed RANGE and MA validations)
+        totalValidations = 5  # Updated: Total number of validation steps (restored RANGE validation)
         currentValidation = 1
         
         if opp["score"] < scoreThreshold:
@@ -522,8 +522,25 @@ def analyzePairs():
         # After basic filters, check entry-specific criteria for filter2
         filter2Passed = filter1Passed and not rejected
 
-        # Note: Removed RANGE validation (bounceLow/bounceHigh) and MA validations
-        # The bounce validation is now handled in supportDetector.py
+        # RANGE validation: Check if current price is within allowed bounce range
+        if not rejected:
+            currentValidation = 5
+            try:
+                currentPrice = opp.get("entryPrice", 0)
+                bounceLow = opp.get("bounceLow", 0)
+                bounceHigh = opp.get("bounceHigh", 0)
+                
+                if currentPrice < bounceLow or currentPrice > bounceHigh:
+                    messages(f"  ⚠️  {opp['pair']} rejected by BOUNCE RANGE ({currentValidation}/{totalValidations}): price {currentPrice:.6f} not in range [{bounceLow:.6f}, {bounceHigh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
+                    rejected = True
+                else:
+                    messages(f"  ✅  {opp['pair']} passed BOUNCE RANGE ({currentValidation}/{totalValidations}): price {currentPrice:.6f} in range [{bounceLow:.6f}, {bounceHigh:.6f}]", console=0, log=1, telegram=0, pair=opp['pair'])
+            except Exception as e:
+                messages(f"  ⚠️  {opp['pair']} rejected by BOUNCE RANGE ({currentValidation}/{totalValidations}) check error: {e}", console=0, log=1, telegram=0, pair=opp['pair'])
+                rejected = True
+
+        # Note: Restored RANGE validation (bounceLow/bounceHigh) to filter extreme bounces
+        # The basic bounce validation is handled in supportDetector.py
         
         record = None
         accepted = 0
