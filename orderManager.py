@@ -866,11 +866,13 @@ class OrderManager:
                 return None
 
         # 3) Fetch current market price
+        messages(f"[DEBUG] Fetching ticker for {symbol}...", console=0, log=1, telegram=0)
         try:
             ticker = self.exchange.fetch_ticker(symbol)
             price = Decimal(str(ticker.get('last') or 0))
             if price <= 0:
                 raise ValueError(f"Invalid price for {symbol}: {price}")
+            messages(f"[DEBUG] Successfully fetched price for {symbol}: {price}", console=0, log=1, telegram=0)
         except Exception as e:
             messages(f"Error fetching price for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
             # Clean up reservation
@@ -883,6 +885,7 @@ class OrderManager:
         rawAmt = quoteQty / price
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
         messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=0, log=1, telegram=0)
+        messages(f"[DEBUG] Fetching market info for {normSymbol}...", console=0, log=1, telegram=0)
         info = self.markets.get(normSymbol, {}).get('info', {})
         messages(f"[DEBUG] info markets: {json.dumps(info)}", console=0, log=1, telegram=0)
         pf = next((f for f in info.get('filters', []) if f.get('filterType') == 'PRICE_FILTER'), {})
