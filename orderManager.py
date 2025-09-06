@@ -834,10 +834,13 @@ class OrderManager:
                 binSym = symbol.replace('/', '')
                 return None
 
-            # 1) Refresh and reconcile open positions
-            messages(f"[DEBUG] About to call updatePositions() for {symbol}", console=0, log=1, telegram=0)
-            self.updatePositions()
-            messages(f"[DEBUG] Successfully completed updatePositions() for {symbol}", console=0, log=1, telegram=0)
+        # 1) Refresh and reconcile open positions (outside lock to avoid deadlock)
+        messages(f"[DEBUG] About to call updatePositions() for {symbol}", console=0, log=1, telegram=0)
+        self.updatePositions()
+        messages(f"[DEBUG] Successfully completed updatePositions() for {symbol}", console=0, log=1, telegram=0)
+        
+        # Re-acquire lock for position checks and reservation
+        with self.positions_lock:
             if symbol in self.positions:
                 messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
                 return None
