@@ -162,8 +162,6 @@ def savePlot(item):
     touchCount = item.get('touchesCount', item.get('touchCount', 0))  # Check both possible field names
     minTouches = 3
     
-    # Debug logging
-    messages(f"DEBUG PLOTTING - Symbol: {item.get('symbol', 'N/A')}, touchCount: {touchCount}, minTouches: {minTouches}, touchesOk: {touchCount >= minTouches}", console=0, log=1, telegram=0)
     # Para soporte: slope positivo, para resistencia: negativo
     isLong = item.get('type', 'long') == 'long'
     slopeOk = slope > 0 if isLong else slope < 0

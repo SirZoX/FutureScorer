@@ -205,18 +205,14 @@ def analyzePairs():
     # 2) Generate opportunities in parallel
     def processPair(pair):
         import time
-        messages(f"[DEBUG] Starting analysis for {pair}", console=0, log=1, telegram=0)
         # Reduced sleep time for better performance - BingX can handle more requests
         time.sleep(gvars.pairAnalysisSleepTime)  # Centralized sleep time configuration
         rate_limiter.acquire()
         try:
             # Use cached OHLCV data to reduce API calls
             cache_key = f"ohlcv_{pair}_{timeframe}_{requestedCandles}"
-            messages(f"[DEBUG] Fetching OHLCV for {pair}...", console=0, log=1, telegram=0)
             ohlcv = cachedCall(cache_key, exchange.fetch_ohlcv, 300, pair, timeframe, None, requestedCandles)
-            messages(f"[DEBUG] Successfully fetched {len(ohlcv)} candles for {pair}", console=0, log=1, telegram=0)
         except Exception as e:
-            messages(f"[DEBUG] OHLCV error for {pair}: {e}", console=0, log=1, telegram=0)
             return {"pair": pair, "reason": f"OHLCV error: {e}"}
 
         df = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
@@ -242,7 +238,6 @@ def analyzePairs():
 
         df = filterSignals(df)
         # Detectar oportunidades long y short
-        messages(f"[DEBUG] Running support/resistance analysis for {pair}...", console=0, log=1, telegram=0)
         opps = findPossibleResistancesAndSupports(
             df["low"].values,
             df["high"].values,
@@ -253,7 +248,6 @@ def analyzePairs():
             minTouches=minTouches,
             closeViolationPct=0.02
         )
-        messages(f"[DEBUG] Found {len(opps)} opportunities for {pair}", console=0, log=1, telegram=0)
         results = []
         for opp in opps:
             # The bounce validation is already done in supportDetector.py
@@ -315,13 +309,23 @@ def analyzePairs():
                     "candleCount": len(df)
                 }
             })
-        messages(f"[DEBUG] Completed analysis for {pair}, returning {len(results)} results", console=0, log=1, telegram=0)
         return results
 
     messages(f"[DEBUG] Starting parallel processing of {len(pairsToAnalyze)} pairs with {gvars.threadPoolMaxWorkers} workers", console=0, log=1, telegram=0)
+    
+    # Progress counter
+    processed_count = 0
+    total_pairs = len(pairsToAnalyze)
+    
     with ThreadPoolExecutor(max_workers=gvars.threadPoolMaxWorkers) as executor:
         futures = {executor.submit(processPair, p): p for p in pairsToAnalyze}
         for fut in as_completed(futures):
+            processed_count += 1
+            
+            # Log progress every 25 pairs
+            if processed_count % 25 == 0 or processed_count == total_pairs:
+                messages(f"Progress: {processed_count}/{total_pairs} pairs analyzed", console=0, log=1, telegram=0)
+            
             res = fut.result()
             if res:
                 # Si es oportunidad válida, añadir a opportunities
