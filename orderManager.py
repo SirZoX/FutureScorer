@@ -835,7 +835,9 @@ class OrderManager:
                 return None
 
             # 1) Refresh and reconcile open positions
+            messages(f"[DEBUG] About to call updatePositions() for {symbol}", console=0, log=1, telegram=0)
             self.updatePositions()
+            messages(f"[DEBUG] Successfully completed updatePositions() for {symbol}", console=0, log=1, telegram=0)
             if symbol in self.positions:
                 messages(f"Skipping openPosition for {symbol}: position already open", console=1, log=1, telegram=0, pair=symbol)
                 return None
@@ -849,7 +851,9 @@ class OrderManager:
             self.positions[symbol] = {'status': 'opening', 'timestamp': datetime.now().isoformat()}
         
         # 2) Check free balance in baseAsset (e.g. USDC)
+        messages(f"[DEBUG] Fetching free balance for {symbol}...", console=0, log=1, telegram=0)
         free = self.exchange.fetch_free_balance()
+        messages(f"[DEBUG] Successfully fetched balance for {symbol}", console=0, log=1, telegram=0)
         availableUSDC = float(free.get(self.baseAsset, 0) or 0)
         baseInvestment = float(self.config.get('usdcInvestment', 0))
         investUSDC = baseInvestment * investmentPct
