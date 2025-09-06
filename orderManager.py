@@ -238,7 +238,7 @@ class OrderManager:
                     timeSinceOpen = currentTime - openTime
                     
                     # Skip if already notified to avoid duplicate notifications
-                    if position.get('notified', False):
+                    if position.get('notified', False) or position.get('notification_sent', False):
                         messages(f"[DEBUG] Position {symbol} already notified, skipping notification", console=0, log=1, telegram=0)
                         symbolsToRemove.append(symbol)
                         continue
@@ -612,9 +612,16 @@ class OrderManager:
             with self.positions_lock:
                 # Re-check after acquiring lock to prevent race conditions
                 current_position = self.positions.get(symbol, {})
-                if current_position.get('notified', False):
+                
+                # Create unique identifier for this position (symbol + opening timestamp)
+                position_id = f"{symbol}_{current_position.get('open_ts_unix', '')}"
+                
+                # Check if already notified using unique identifier
+                if current_position.get('notified', False) or current_position.get('notification_sent', False):
+                    messages(f"[DEBUG] Position {symbol} already notified, skipping", pair=symbol, console=0, log=1, telegram=0)
                     symbols_to_remove.append(symbol)
                     continue
+                    
                 # Mark as being processed to prevent other threads from processing the same position
                 current_position['processing_notification'] = True
                 self.positions[symbol] = current_position
@@ -786,6 +793,7 @@ class OrderManager:
                 
                 with self.positions_lock:
                     position['notified'] = True
+                    position['notification_sent'] = True  # Permanent flag to prevent duplicates
                     position.pop('processing_notification', None)  # Clean up processing flag
                     self.positions[symbol] = position
                 # Marcar para eliminar del dict
@@ -795,6 +803,7 @@ class OrderManager:
                 messages(f"[ERROR] Telegram/log failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
                 with self.positions_lock:
                     position['notified'] = False
+                    position['notification_sent'] = False  # Reset notification flag
                     position.pop('processing_notification', None)  # Clean up processing flag
                     self.positions[symbol] = position
                 continue
@@ -1249,7 +1258,7 @@ class OrderManager:
         """
         try:
             position = self.positions.get(symbol, {})
-            if position.get('notified', False):
+            if position.get('notified', False) or position.get('notification_sent', False):
                 return  # Already notified
                 
             # Get position data
@@ -1264,6 +1273,7 @@ class OrderManager:
                 messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
                 with self.positions_lock:
                     position['notified'] = True
+                    position['notification_sent'] = True
                     position.pop('processing_notification', None)
                     self.positions[symbol] = position
                 return
@@ -1335,6 +1345,7 @@ class OrderManager:
                     
                     with self.positions_lock:
                         position['notified'] = True
+                        position['notification_sent'] = True
                         position.pop('processing_notification', None)
                         self.positions[symbol] = position
                     return
@@ -1359,6 +1370,7 @@ class OrderManager:
                     messages(simpleMessage, pair=symbol, console=1, log=1, telegram=1)
                     with self.positions_lock:
                         position['notified'] = True
+                        position['notification_sent'] = True
                         position.pop('processing_notification', None)
                         self.positions[symbol] = position
                     return
@@ -1457,6 +1469,7 @@ class OrderManager:
             # Mark as notified
             with self.positions_lock:
                 position['notified'] = True
+                position['notification_sent'] = True
                 position.pop('processing_notification', None)
                 self.positions[symbol] = position
             
