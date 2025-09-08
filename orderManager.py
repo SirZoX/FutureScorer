@@ -894,9 +894,11 @@ class OrderManager:
                 self.positions.pop(symbol, None)
             return None
 
-        # 4) Compute how much base asset to buy
-        quoteQty = Decimal(str(investUSDC))
-        rawAmt = quoteQty / price
+        # 4) Compute how much base asset to buy (based on total position value, not margin)
+        # For futures with leverage, amount should be for the full position value
+        positionValueDecimal = Decimal(str(finalPositionUSDT))
+        rawAmt = positionValueDecimal / price
+        messages(f"[DEBUG] Amount calculation: position_value={finalPositionUSDT} / price={price} = {rawAmt}", console=0, log=1, telegram=0)
         normSymbol = symbol.replace(':USDT', '') if symbol.endswith(':USDT') else symbol
         messages(f"[DEBUG] normSymbol usado para markets: {normSymbol}", console=0, log=1, telegram=0)
         messages(f"[DEBUG] Fetching market info for {normSymbol}...", console=0, log=1, telegram=0)
@@ -911,13 +913,17 @@ class OrderManager:
         messages(f"[DEBUG] rawAmt calculado: {rawAmt}", console=0, log=1, telegram=0)
         amtDec = rawAmt.quantize(stepSize, rounding=ROUND_DOWN) if stepSize else rawAmt
         messages(f"[DEBUG] amtDec tras quantize: {amtDec}", console=0, log=1, telegram=0)
-        # Si la cantidad calculada es menor que el mínimo, usar el mínimo permitido y recalcular inversión
+        # Si la cantidad calculada es menor que el mínimo, usar el mínimo permitido y recalcular posición
         if minQty and amtDec < minQty:
             messages(f"[DEBUG] Amount {amtDec} below minimum lot size {minQty}, ajustando a mínimo", console=0, log=1, telegram=0, pair=symbol)
             amtDec = minQty
-            investUSDC = float(minQty) * float(price)
+            # Recalcular los valores basados en la cantidad mínima
+            actualPositionValue = float(minQty) * float(price)
+            investUSDC = actualPositionValue / leverage
+            finalPositionUSDT = actualPositionValue
+            messages(f"[DEBUG] Recalculated due to min qty: position_value={actualPositionValue}, margin_required={investUSDC}", console=0, log=1, telegram=0)
         amount = float(amtDec)
-        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, margin_used={investUSDC}, position_value={finalPositionUSDT}", pair=symbol, console=0, log=1, telegram=0)
+        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec} (position_amount), margin_required={investUSDC}, position_value={finalPositionUSDT}", pair=symbol, console=0, log=1, telegram=0)
 
         # 5) Place futures order (long/short)
         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
