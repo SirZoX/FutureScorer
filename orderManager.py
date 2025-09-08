@@ -859,7 +859,14 @@ class OrderManager:
         messages(f"[DEBUG] Successfully fetched balance for {symbol}", console=0, log=1, telegram=0)
         availableUSDC = float(free.get(self.baseAsset, 0) or 0)
         baseInvestment = float(self.config.get('usdcInvestment', 0))
-        investUSDC = baseInvestment * investmentPct
+        
+        # NEW LOGIC: Apply leverage FIRST, then score percentage
+        leverage = int(self.config.get('leverage', 20))
+        basePositionUSDT = baseInvestment * leverage  # 100 * 20 = 2000 USDT position
+        finalPositionUSDT = basePositionUSDT * investmentPct  # 2000 * 0.7 = 1400 USDT
+        investUSDC = finalPositionUSDT / leverage  # 1400 / 20 = 70 USDT margin required
+        
+        messages(f"[DEBUG] Leverage calculation for {symbol}: base={baseInvestment}, leverage={leverage}, score%={investmentPct}, final_position={finalPositionUSDT}, margin_required={investUSDC}", console=0, log=1, telegram=0)
         if availableUSDC < investUSDC:
             if investmentPct == 1.0 and availableUSDC > 0:
                 messages(f"[EXCEPCIÓN] No hay saldo suficiente para 100% de inversión, usando todo el saldo disponible: {availableUSDC:.6f} USDC", console=1, log=1, telegram=0, pair=symbol)
@@ -910,7 +917,7 @@ class OrderManager:
             amtDec = minQty
             investUSDC = float(minQty) * float(price)
         amount = float(amtDec)
-        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, usdc={investUSDC}", pair=symbol, console=0, log=1, telegram=0)
+        messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec}, margin_used={investUSDC}, position_value={finalPositionUSDT}", pair=symbol, console=0, log=1, telegram=0)
 
         # 5) Place futures order (long/short)
         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
@@ -1021,6 +1028,7 @@ class OrderManager:
             'slPercent': float(slPct) * 100,
             'leverage': leverage,
             'investment_usdt': investUSDC,
+            'position_value_usdt': finalPositionUSDT,  # Add the full position value
             'side': side.upper()  # Add side information (LONG/SHORT)
         }
         # Log the complete position record being saved
