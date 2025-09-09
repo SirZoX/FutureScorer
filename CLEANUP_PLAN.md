@@ -67,11 +67,12 @@ Eliminar toda la complejidad innecesaria y crear un sistema simple basado en:
 3. `cleanNotifiedPositions()` - elimina posiciones notificadas y con status = closed
 
 ## FASE 4: TESTING Y VALIDACIÓN
-- [ ] Verificar que no hay imports rotos
-- [ ] Verificar que el bot inicia sin errores
+- [x] Verificar que no hay imports rotos - COMPLETADO
+- [x] Corregir referencias a notifyPositionClosure - COMPLETADO
+- [x] Verificar que el bot inicia sin errores - COMPLETADO
 - [ ] Probar apertura de posición
 - [ ] Probar verificación de órdenes
 - [ ] Probar notificación y limpieza
 
 ## PROGRESO ACTUAL
-- Iniciando Fase 1: Eliminación de archivos innecesarios
+- Ejecutando Fase 4: Testing del sistema simplificado

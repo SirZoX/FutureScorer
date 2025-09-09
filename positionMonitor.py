@@ -156,7 +156,6 @@ def notifyClosedPositions():
     NUEVA FUNCIÓN SIMPLE: Notifica posiciones cerradas que aún no han sido notificadas
     """
     from logManager import messages
-    from fileManager import notifyPositionClosure
     
     try:
         with open(positionsFile, 'r', encoding='utf-8') as f:
@@ -181,8 +180,8 @@ def notifyClosedPositions():
                 profitPct = 0.0    # Will be calculated by notification function
                 
                 try:
-                    # Send notification
-                    notifyPositionClosure(symbol, closeReason, profitQuote, profitPct, 0, {})
+                    # Send notification via telegram
+                    messages(f"🔔 Position {symbol} closed - {closeReason}", console=1, log=1, telegram=1)
                     
                     # Mark as notified
                     pos['notification_sent'] = True

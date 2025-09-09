@@ -14,7 +14,6 @@ from configManager import configManager
 from logManager import messages
 from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
-from fileManager import notifyPositionClosure
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -1181,8 +1180,8 @@ class OrderManager:
                     'profitPct': netProfitPct
                 }
                 
-                # Use unified notification function
-                notifyPositionClosure(symbol, "SYNC", netProfitQuote, netProfitPct, totalFees, debugDetails)
+                # Log position sync closure
+                messages(f"[SYNC] Position {symbol} closed - Profit: {netProfitQuote:.4f} USDT ({netProfitPct:.2f}%)", console=1, log=1, telegram=0)
                 
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
