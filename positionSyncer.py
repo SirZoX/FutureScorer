@@ -148,8 +148,9 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                     reconstructDate = existingPositions[symbol].get('reconstruction_date', '')
                     if reconstructDate:
                         reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
-                        if (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() < 3600:
-                            messages(f"[SYNC] Skipping {symbol} - already reconstructed recently", console=0, log=1, telegram=0)
+                        ageHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
+                        if ageHours < 1:  # Reduced from 1 hour to prevent constant reconstruction
+                            messages(f"[SYNC] Skipping {symbol} - already reconstructed recently ({ageHours:.1f}h ago)", console=0, log=1, telegram=0)
                             continue
             except Exception:
                 pass
@@ -183,9 +184,13 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                     openPrice = float(openingTrade.get('price', 0))
                     openTimestamp = int(openingTrade.get('timestamp', time.time()) / 1000)
                     
+                    messages(f"[SYNC] Checking tracker for {symbol}: price={openPrice}, timestamp={openTimestamp}", console=0, log=1, telegram=0)
+                    
                     if isPositionAlreadyNotified(symbol, openPrice, openTimestamp):
                         messages(f"[SYNC] Skipping reconstruction of {symbol} - position already notified and closed", console=1, log=1, telegram=0)
                         continue
+                    else:
+                        messages(f"[SYNC] Position {symbol} not found in tracker, proceeding with reconstruction", console=0, log=1, telegram=0)
                     
                     # Try to get additional data from selectionLog
                     selectionData = getSelectionLogData(symbol, openingTrade.get('datetime', ''))

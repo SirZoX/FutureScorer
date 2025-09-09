@@ -92,11 +92,16 @@ def isPositionAlreadyNotified(symbol, openPrice, openTimestamp):
         # Create unique key for this position
         positionKey = f"{symbol}_{openPrice}_{openTimestamp}"
         
+        messages(f"[TRACKER] Checking key: {positionKey}", console=0, log=1, telegram=0)
+        messages(f"[TRACKER] Available keys: {list(notifiedData.keys())[:5]}", console=0, log=1, telegram=0)
+        
         isNotified = positionKey in notifiedData
         
         if isNotified:
             notifiedInfo = notifiedData[positionKey]
             messages(f"[TRACKER] Position {symbol} already notified on {notifiedInfo.get('notifiedDate', 'unknown date')}", console=0, log=1, telegram=0)
+        else:
+            messages(f"[TRACKER] Position {symbol} NOT found in tracker (key: {positionKey})", console=0, log=1, telegram=0)
         
         return isNotified
         

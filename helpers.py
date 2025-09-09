@@ -94,6 +94,13 @@ def checkTelegram():
                         messages(f"📋 Notified positions tracker:\n• Total: {stats['total']}\n• Recent (24h): {stats['recent']}", console=0, log=0, telegram=1)
                     except Exception as e:
                         messages(f"❌ Tracker stats failed: {e}", console=0, log=0, telegram=1)
+                elif text == 'cleartracker':
+                    from notifiedTracker import saveNotifiedPositions
+                    try:
+                        saveNotifiedPositions({})
+                        messages("✅ Tracker cleared - all reconstruction blocks removed", console=0, log=0, telegram=1)
+                    except Exception as e:
+                        messages(f"❌ Clear tracker failed: {e}", console=0, log=0, telegram=1)
     except Exception as e:
         messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
     
