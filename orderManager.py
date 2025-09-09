@@ -210,104 +210,13 @@ class OrderManager:
 
     def cleanClosedPositions(self):
         """
-        Clean positions that are no longer open on the exchange
-        Added enhanced safety mechanism to avoid false deletions due to API inconsistency
+        SIMPLIFIED: Call external function to clean notified positions
         """
         try:
-            exchangeOpenSymbols = self.getExchangeOpenPositions()
-            localSymbols = set(self.positions.keys())
-            
-            messages(f"[DEBUG] Local positions: {localSymbols}", console=0, log=1, telegram=0)
-            messages(f"[DEBUG] Exchange open positions: {exchangeOpenSymbols}", console=0, log=1, telegram=0)
-            
-            # Find positions that are in local file but not on exchange
-            potentialClosedSymbols = localSymbols - exchangeOpenSymbols
-            
-            if potentialClosedSymbols:
-                messages(f"[CLEANUP] Potentially closed positions detected: {potentialClosedSymbols}", console=1, log=1, telegram=0)
-                
-                # Enhanced safety check: only remove positions with confirmed closing trades
-                currentTime = time.time()
-                symbolsToRemove = []
-                symbolsToNotify = []
-                
-                for symbol in potentialClosedSymbols:
-                    position = self.positions.get(symbol, {})
-                    openTime = position.get('open_ts_unix', currentTime)
-                    timeSinceOpen = currentTime - openTime
-                    
-                    messages(f"[CLEANUP] Evaluating {symbol}: reconstructed={position.get('reconstructed', False)}, timeSinceOpen={timeSinceOpen/3600:.1f}h", console=1, log=1, telegram=0)
-                    
-                    # Skip if already notified to avoid duplicate notifications
-                    if position.get('notified', False) or position.get('notification_sent', False):
-                        messages(f"[DEBUG] Position {symbol} already notified, skipping notification", console=0, log=1, telegram=0)
-                        symbolsToRemove.append(symbol)
-                        continue
-                    
-                    # Protection for recently reconstructed positions - give them time to stabilize
-                    if position.get('reconstructed', False):
-                        reconstructDate = position.get('reconstruction_date', '')
-                        if reconstructDate:
-                            try:
-                                reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
-                                reconstructAgeHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
-                                if reconstructAgeHours < 4:  # Increased grace period to 4 hours
-                                    messages(f"[CLEANUP] Position {symbol} is recently reconstructed ({reconstructAgeHours:.1f}h ago), skipping cleanup", console=1, log=1, telegram=0)
-                                    continue
-                            except Exception as e:
-                                messages(f"[DEBUG] Error parsing reconstruction date for {symbol}: {e}", console=0, log=1, telegram=0)
-                    
-                    # Check for closing trades to confirm the position is actually closed
-                    hasClosingTrade = self.checkForClosingTrade(symbol)
-                    
-                    # Also allow cleanup for old positions (more than 24 hours) even without closing trades
-                    # This prevents old positions from staying forever due to API limitations
-                    isOldPosition = timeSinceOpen > 86400  # 24 hours in seconds
-                    
-                    # Be more conservative: only remove if we have confirmed closing trades
-                    if hasClosingTrade is True:
-                        # Confirmed closing trade found
-                        symbolsToRemove.append(symbol)
-                        symbolsToNotify.append(symbol)
-                        messages(f"[DEBUG] Position {symbol} confirmed closed via trades, safe to remove", console=0, log=1, telegram=0)
-                    elif hasClosingTrade is False and isOldPosition:
-                        # Confirmed open but very old position - remove anyway
-                        symbolsToRemove.append(symbol)
-                        symbolsToNotify.append(symbol)
-                        messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and confirmed not closed, removing anyway", console=0, log=1, telegram=0)
-                    elif hasClosingTrade is None:
-                        # Cannot determine status due to API issues - be conservative
-                        if isOldPosition:
-                            # Only remove very old positions when we can't determine status
-                            symbolsToRemove.append(symbol)
-                            symbolsToNotify.append(symbol)
-                            messages(f"[DEBUG] Position {symbol} is old ({timeSinceOpen/3600:.1f}h) and status undetermined due to API issues, removing", console=0, log=1, telegram=0)
-                        else:
-                            # Keep recent positions when status is undetermined
-                            messages(f"[DEBUG] Position {symbol} status undetermined due to API issues, keeping for safety (age: {timeSinceOpen/3600:.1f}h)", console=0, log=1, telegram=0)
-                    else:
-                        # hasClosingTrade is False and not old position
-                        messages(f"[DEBUG] Position {symbol} not found on exchange but no closing trades found, keeping for safety", console=0, log=1, telegram=0)
-                
-                # Send notifications for closed positions before removing them
-                for symbol in symbolsToNotify:
-                    self.notifyPositionClosed(symbol)
-                
-                if symbolsToRemove:
-                    messages(f"[CLEANUP] Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=1, log=1, telegram=0)
-                    for symbol in symbolsToRemove:
-                        messages(f"[CLEANUP] Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
-                        self.positions.pop(symbol, None)
-                    
-                    self.savePositions()
-                    messages(f"[CLEANUP] Cleaned {len(symbolsToRemove)} closed positions from local file", console=1, log=1, telegram=0)
-                else:
-                    messages("No positions old enough to be safely removed", console=0, log=1, telegram=0)
-            else:
-                messages("No closed positions found to clean", console=0, log=1, telegram=0)
-                
+            from positionMonitor import cleanNotifiedPositions
+            cleanNotifiedPositions()
         except Exception as e:
-            messages(f"[ERROR] Error cleaning closed positions: {e}", console=1, log=1, telegram=0)
+            messages(f"[ERROR] Error cleaning positions: {e}", console=1, log=1, telegram=0)
 
     def calculateOrderSize(self, symbol):
         """
@@ -599,239 +508,30 @@ class OrderManager:
 
     def updatePositions(self):
         """
-        Sincroniza el estado con el exchange y elimina solo el nodo del símbolo cerrado.
+        SIMPLIFIED: Check order status, notify closed positions, and clean notified ones
         """
-        #messages("Analyzing positions", console=1, log=1, telegram=0)
-        # Cargar desde disco solo si el dict está vacío o no se ha cargado
-        if not hasattr(self, '_positions_loaded') or not self.positions:
+        try:
+            # Load positions if not already loaded
+            if not hasattr(self, '_positions_loaded') or not self.positions:
+                self.positions = self.loadPositions()
+                self._positions_loaded = True
+            
+            # Step 1: Check order status and mark closed positions
+            from positionMonitor import checkOrderStatusPeriodically
+            checkOrderStatusPeriodically()
+            
+            # Step 2: Notify closed positions
+            from positionMonitor import notifyClosedPositions
+            notifyClosedPositions()
+            
+            # Step 3: Clean notified positions
+            self.cleanClosedPositions()
+            
+            # Reload positions after changes
             self.positions = self.loadPositions()
-            self._positions_loaded = True
-        
-        # First, clean positions that are no longer open on the exchange
-        self.cleanClosedPositions()
-        
-        symbols_to_remove = []
-        for symbol, position in self.positions.items():
-            # Thread-safe check for notification status
-            with self.positions_lock:
-                # Re-check after acquiring lock to prevent race conditions
-                current_position = self.positions.get(symbol, {})
-                
-                # CRITICAL: Protect recently reconstructed positions
-                reconstructDate = current_position.get('reconstruct_date', '')
-                if reconstructDate:
-                    try:
-                        reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
-                        ageHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
-                        if ageHours < 4:  # 4-hour grace period for reconstructed positions
-                            messages(f"[PROTECTION] Skipping elimination of recently reconstructed position {symbol} (age: {ageHours:.1f}h)", pair=symbol, console=0, log=1, telegram=0)
-                            continue
-                    except Exception as e:
-                        messages(f"[DEBUG] Error parsing reconstruct_date for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
-                
-                # Create unique identifier for this position (symbol + opening timestamp)
-                position_id = f"{symbol}_{current_position.get('open_ts_unix', '')}"
-                
-                # Check if already notified using unique identifier
-                if current_position.get('notified', False) or current_position.get('notification_sent', False):
-                    messages(f"[DEBUG] Position {symbol} already notified, skipping", pair=symbol, console=0, log=1, telegram=0)
-                    symbols_to_remove.append(symbol)
-                    continue
-                    
-                # Mark as being processed to prevent other threads from processing the same position
-                current_position['processing_notification'] = True
-                self.positions[symbol] = current_position
-                
-            buyQuantity  = float(position.get('amount', 0))
-            buyPrice     = float(position.get('openPrice', 0))
-            tsOpenIso    = position.get('timestamp')  # ISO string
-            openTsUnix   = position.get('open_ts_unix') or int(datetime.fromisoformat(tsOpenIso).timestamp())
-            # Usar los nuevos campos explícitos para TP/SL activos
-            tpOrderId2 = position.get('tpOrderId2')
-            slOrderId2 = position.get('slOrderId2')
-            tpOrderId1 = position.get('tpOrderId1')
-            slOrderId1 = position.get('slOrderId1')
-            notified     = position.get('notified', False)
-            tpStatus = slStatus = None
-            tpInfo = slInfo = None
-            # Usar el TP/SL activo (2 si existe, si no el 1)
-            activeTpOrderId = tpOrderId2 if tpOrderId2 else tpOrderId1
-            activeSlOrderId = slOrderId2 if slOrderId2 else slOrderId1
             
-            # Use the improved order checking logic
-            hasClosingOrder = self._checkOrderStatusForClosure(symbol, activeTpOrderId, activeSlOrderId)
-            
-            if not hasClosingOrder:
-                continue  # Position still active, skip to next
-                
-            # If we reach here, a closing order was executed
-            # Determine close reason by checking which order was executed
-            close_reason = 'UNKNOWN'
-            if activeTpOrderId:
-                try:
-                    tpOrder = self.exchange.fetch_order(activeTpOrderId, symbol)
-                    if tpOrder.get('status') in ['FILLED', 'closed']:
-                        close_reason = 'TP'
-                except:
-                    pass
-            
-            if close_reason == 'UNKNOWN' and activeSlOrderId:
-                try:
-                    slOrder = self.exchange.fetch_order(activeSlOrderId, symbol)
-                    if slOrder.get('status') in ['FILLED', 'closed']:
-                        close_reason = 'SL'
-                except:
-                    pass
-            
-            # Process the closed position
-            try:
-                allTrades = self.exchange.fetch_my_trades(symbol)
-                
-                # Filter for sell trades after position open
-                sellTrades = [
-                    t for t in allTrades
-                    if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
-                ]
-                
-                if not sellTrades:
-                    messages(f"No sell trades found for {symbol} despite closed orders, skipping", pair=symbol, console=1, log=1, telegram=0)
-                    continue
-                
-                # Calculate totals from sell trades
-                totalQuantity = sum(float(t.get('amount', 0)) for t in sellTrades)
-                totalCost = sum(float(t.get('cost', 0)) for t in sellTrades)
-                totalFees = sum(float(t.get('fee', {}).get('cost', 0)) for t in sellTrades)
-                
-                # Calculate average exit price
-                avgExitPrice = totalCost / totalQuantity if totalQuantity > 0 else 0
-                
-                # Calculate investment and profit
-                actualInvestmentUsdt = buyQuantity * buyPrice
-                grossProfitQuote = totalCost - actualInvestmentUsdt
-                totalFeesComplete = totalFees
-                profitQuote = grossProfitQuote - totalFeesComplete
-                profitPct = (profitQuote / actualInvestmentUsdt) * 100 if actualInvestmentUsdt > 0 else 0
-            
-            except Exception as e:
-                messages(f"[ERROR] Could not process trades for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
-                continue
-
-            if not close_reason:
-                continue
-
-            if notified:
-                continue
-
-            try:
-                allTrades = self.exchange.fetch_my_trades(symbol)
-            except Exception as e:
-                allTrades = []
-                messages(f"[DEBUG] Failed to get {symbol} trades: {e}", pair=symbol, console=1, log=1, telegram=0)
-
-            relevantTrades = [
-                t for t in allTrades
-                if t.get('side') == 'sell' and t.get('timestamp', 0) >= openTsUnix * 1000
-            ]
-
-            totalQuantity = 0.0
-            totalCost     = 0.0
-            totalFees     = 0.0
-            for trade in relevantTrades:
-                amt  = float(trade.get('amount', 0))
-                cost = float(trade.get('cost',   0))
-                fee  = float(trade.get('fee', {}).get('cost', 0))
-                if totalQuantity + amt > buyQuantity:
-                    needed       = buyQuantity - totalQuantity
-                    proportionalCost = cost * (needed / amt)
-                    proportionalFee = fee * (needed / amt)
-                    totalCost   += proportionalCost
-                    totalFees   += proportionalFee
-                    totalQuantity = buyQuantity
-                    break
-                totalQuantity += amt
-                totalCost     += cost
-                totalFees     += fee
-
-            avgExitPrice = totalCost / totalQuantity if totalQuantity else 0
-            profitPct    = ((avgExitPrice / buyPrice - 1) * 100) if buyPrice else 0
-            
-            # Calculate profit in USDT for futures with leverage
-            # Get the actual investment and leverage from the position
-            actualInvestmentUsdt = float(position.get('investment_usdt', 0))
-            leverage = float(position.get('leverage', 10))
-            
-            # If investment_usdt is not available (old positions), estimate it
-            if not actualInvestmentUsdt:
-                # For old positions, estimate: notional_value / leverage
-                notionalValue = buyQuantity * buyPrice
-                actualInvestmentUsdt = notionalValue / leverage
-            
-            # For futures: profit = investment × (price_change_%) × leverage
-            priceChangePct = profitPct / 100  # Convert percentage to decimal
-            grossProfitQuote = actualInvestmentUsdt * priceChangePct * leverage
-            
-            # Get buy fees from position opening (estimate based on investment and typical fee rate)
-            # For BingX futures, typical fee is 0.05% (0.0005)
-            estimatedBuyFees = actualInvestmentUsdt * 0.0005  # Estimate buy fees
-            totalFeesComplete = totalFees + estimatedBuyFees  # Total fees (buy + sell)
-            
-            # Net profit after all fees
-            profitQuote = grossProfitQuote - totalFeesComplete
-            
-            # Alternative calculation (should give same result): profitQuote = investmentUsdt * (profitPct / 100)
-            
-            # Prepare debug details for unified notification
-            debugDetails = {
-                'buyPrice': buyPrice,
-                'avgExitPrice': avgExitPrice,
-                'quantity': totalQuantity,
-                'investmentUsdt': actualInvestmentUsdt,
-                'totalCost': totalCost,
-                'grossProfit': grossProfitQuote,
-                'totalFees': totalFeesComplete,
-                'netProfit': profitQuote,
-                'profitPct': profitPct,
-                'closeReason': close_reason
-            }
-            
-            try:
-                # Use unified notification function
-                notifyPositionClosure(symbol, close_reason, profitQuote, profitPct, totalFeesComplete, debugDetails)
-                
-                # Comentar el uso antiguo y dejar nota
-                # recordId = f"{tpOrderId or ''}-{slOrderId or ''}"
-                recordId = f"{activeTpOrderId or ''}-{activeSlOrderId or ''}"
-                messages(f"[DEBUG] Attempting to annotate selectionLog for {symbol}: recordId='{recordId}', profit={profitQuote:.4f}, pct={profitPct:.2f}", pair=symbol, console=0, log=1, telegram=0)
-                self.annotateSelectionLog(recordId, profitQuote, profitPct, tsOpenIso)
-                
-                # Log the trade to trades.csv
-                self.logTradeFromPosition(symbol, position, close_reason, profitQuote)
-                
-                # Mark position as notified in tracker to prevent duplicates from sync
-                openPrice = float(position.get('openPrice', 0))
-                openTimestamp = position.get('open_ts_unix', 0)
-                markPositionAsNotified(symbol, openPrice, openTimestamp, profitQuote)
-                
-                with self.positions_lock:
-                    position['notified'] = True
-                    position['notification_sent'] = True  # Permanent flag to prevent duplicates
-                    position.pop('processing_notification', None)  # Clean up processing flag
-                    self.positions[symbol] = position
-                # Marcar para eliminar del dict
-                symbols_to_remove.append(symbol)
-                continue
-            except Exception as e:
-                messages(f"[ERROR] Telegram/log failed for {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
-                with self.positions_lock:
-                    position['notified'] = False
-                    position['notification_sent'] = False  # Reset notification flag
-                    position.pop('processing_notification', None)  # Clean up processing flag
-                    self.positions[symbol] = position
-                continue
-        # Eliminar solo los símbolos cerrados
-        for symbol in symbols_to_remove:
-            self.positions.pop(symbol, None)
-        self.savePositions()
+        except Exception as e:
+            messages(f"[ERROR] Error in updatePositions: {e}", console=1, log=1, telegram=0)
 
 
 
@@ -1067,7 +767,9 @@ class OrderManager:
             'leverage': leverage,
             'investment_usdt': investUSDC,
             'position_value_usdt': finalPositionUSDT,  # Add the full position value
-            'side': side.upper()  # Add side information (LONG/SHORT)
+            'side': side.upper(),  # Add side information (LONG/SHORT)
+            'status': 'open',  # NEW: Set initial status
+            'notification_sent': False  # NEW: Flag for notification tracking
         }
         # Log the complete position record being saved
         messages(f"[DEBUG] Saving position record for {symbol}: {record}", pair=symbol, console=0, log=1, telegram=0)
@@ -1382,11 +1084,6 @@ class OrderManager:
                     # Log the trade to trades.csv
                     self.logTradeFromPosition(symbol, position, orderType, pnlUsdt)
                     
-                    # Mark position as notified in tracker to prevent duplicates from sync
-                    openPrice = float(position.get('openPrice', 0))
-                    openTimestamp = position.get('open_ts_unix', 0)
-                    markPositionAsNotified(symbol, openPrice, openTimestamp, pnlUsdt)
-                    
                     # Update selectionLog with close data
                     try:
                         # Construct recordId from position TP/SL order IDs
@@ -1499,11 +1196,6 @@ class OrderManager:
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
                 
-                # Mark position as notified in tracker to prevent duplicates from sync
-                openPrice = float(position.get('openPrice', 0))
-                openTimestamp = position.get('open_ts_unix', 0)
-                markPositionAsNotified(symbol, openPrice, openTimestamp, netProfitQuote)
-                
                 # Update selectionLog with close data
                 try:
                     # Construct recordId from position TP/SL order IDs
@@ -1534,11 +1226,6 @@ class OrderManager:
             
             # Mark as notified
             with self.positions_lock:
-                # Mark position as notified in tracker to prevent duplicates from sync
-                openPrice = float(position.get('openPrice', 0))
-                openTimestamp = position.get('open_ts_unix', 0)
-                markPositionAsNotified(symbol, openPrice, openTimestamp, 0)  # 0 profit when we can't calculate
-                
                 position['notified'] = True
                 position['notification_sent'] = True
                 position.pop('processing_notification', None)

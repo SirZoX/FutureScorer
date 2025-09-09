@@ -319,19 +319,19 @@ if __name__ == "__main__":
     schedule.every().day.at("00:00").do(orderManager.updateDailyBalance)
     schedule.every(10).seconds.do(helpers.checkTelegram)
     
-    # Schedule position synchronization every 5 minutes
-    from positionSyncer import schedulePositionSync, performInitialSync
-    positionSyncFunction = schedulePositionSync(orderManager, intervalMinutes=5)
+    # NEW SIMPLIFIED SYSTEM: Schedule order checking and position management
+    from positionMonitor import checkOrderStatusPeriodically, notifyClosedPositions, cleanNotifiedPositions
     
-    # CRITICAL: Perform initial position sync at startup to prevent duplicates
-    messages("Executing initial position sync to prevent duplicates...", console=1, log=1, telegram=0)
-    try:
-        performInitialSync(orderManager)
-        messages("Initial position sync completed successfully", console=1, log=1, telegram=0)
-    except Exception as e:
-        messages(f"[ERROR] Initial position sync failed: {e}", console=1, log=1, telegram=0)
+    # Check order status every 2 minutes
+    schedule.every(2).minutes.do(checkOrderStatusPeriodically)
     
-    schedule.every(5).minutes.do(positionSyncFunction)
+    # Notify closed positions every 3 minutes  
+    schedule.every(3).minutes.do(notifyClosedPositions)
+    
+    # Clean notified positions every 10 minutes
+    schedule.every(10).minutes.do(cleanNotifiedPositions)
+    
+    messages("New simplified position management system scheduled", console=1, log=1, telegram=0)
     
     # Set orderManager reference for telegram commands
     import helpers

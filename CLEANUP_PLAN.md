@@ -54,7 +54,7 @@ Eliminar toda la complejidad innecesaria y crear un sistema simple basado en:
 ### Nuevas funciones simples:
 1. `checkOrderStatusPeriodically()` - verifica IDs de órdenes
 2. `notifyClosedPosition()` - notifica posición cerrada
-3. `cleanNotifiedPositions()` - elimina posiciones notificadas
+3. `cleanNotifiedPositions()` - elimina posiciones notificadas y con status = closed
 
 ## FASE 4: TESTING Y VALIDACIÓN
 - [ ] Verificar que no hay imports rotos
