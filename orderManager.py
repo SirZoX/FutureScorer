@@ -480,7 +480,7 @@ class OrderManager:
             sample_ids = [row.get('id', 'NO_ID') for row in rows[:5]]
             messages(f"[ERROR] No se encontró la línea con id='{orderIdentifier}' para actualizar cierre en selectionLog.csv. Sample IDs: {sample_ids}", console=1, log=1, telegram=1)
 
-    def logTrade(self, symbol: str, openDate: str, closeDate: str, elapsed: str, investmentUsdt: float, leverage: int, netProfitUsdt: float):
+    def logTrade(self, symbol: str, openDate: str, closeDate: str, elapsed: str, investmentUsdt: float, leverage: int, netProfitUsdt: float, side: str = "UNKNOWN"):
         """
         Log a completed trade to trades.csv
         """
@@ -497,7 +497,8 @@ class OrderManager:
                 'elapsed': elapsed,
                 'investment_usdt': f"{investmentUsdt:.4f}",
                 'leverage': str(leverage),
-                'net_profit_usdt': f"{netProfitUsdt:.4f}"
+                'net_profit_usdt': f"{netProfitUsdt:.4f}",
+                'side': side
             }
             
             # Check if file exists and has header
@@ -505,7 +506,7 @@ class OrderManager:
             
             # Append the trade record
             with open(tradesFile, 'a', encoding='utf-8', newline='') as f:
-                fieldnames = ['symbol', 'open_date', 'close_date', 'elapsed', 'investment_usdt', 'leverage', 'net_profit_usdt']
+                fieldnames = ['symbol', 'open_date', 'close_date', 'elapsed', 'investment_usdt', 'leverage', 'net_profit_usdt', 'side']
                 writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=';')
                 
                 # Write header if file is new or empty
@@ -514,7 +515,7 @@ class OrderManager:
                 
                 writer.writerow(tradeRecord)
             
-            messages(f"[DEBUG] Trade logged: {symbol} P/L={netProfitUsdt:.4f} USDT", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[DEBUG] Trade logged: {symbol} {side} P/L={netProfitUsdt:.4f} USDT", pair=symbol, console=0, log=1, telegram=0)
             
         except Exception as e:
             messages(f"[ERROR] Failed to log trade for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
@@ -529,6 +530,7 @@ class OrderManager:
             openPrice = float(position.get('openPrice', 0))
             amount = float(position.get('amount', 0))
             leverage = int(position.get('leverage', 10))  # Get leverage from position or default 10
+            side = position.get('side', 'UNKNOWN')  # Get side (LONG/SHORT) from position
             
             # Calculate investment (amount * price / leverage)
             investmentUsdt = (amount * openPrice) / leverage
@@ -573,7 +575,7 @@ class OrderManager:
             else:
                 elapsedHuman = "Unknown"
             
-            messages(f"[DEBUG] Logging trade for {symbol}: open={openDateHuman}, close={closeDateHuman}, elapsed={elapsedHuman}, investment={investmentUsdt:.4f}, profit={netProfitUsdt:.4f}", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[DEBUG] Logging trade for {symbol}: side={side}, open={openDateHuman}, close={closeDateHuman}, elapsed={elapsedHuman}, investment={investmentUsdt:.4f}, profit={netProfitUsdt:.4f}", pair=symbol, console=0, log=1, telegram=0)
             
             # Log the trade
             self.logTrade(
@@ -583,7 +585,8 @@ class OrderManager:
                 elapsed=elapsedHuman,
                 investmentUsdt=investmentUsdt,
                 leverage=leverage,
-                netProfitUsdt=netProfitUsdt
+                netProfitUsdt=netProfitUsdt,
+                side=side
             )
             
         except Exception as e:
