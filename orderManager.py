@@ -113,19 +113,15 @@ class OrderManager:
 
     def getExchangeOpenPositions(self, maxRetries=3, retryDelay=2):
         """
-        Get currently open positions from the exchange with optimized caching
+        Get currently open positions from the exchange
         Returns a set of symbols with open positions
         """
         try:
-            # Use cached positions with 60-second TTL to reduce API calls
-            positions = cachedCall(
-                "exchange_positions_syncer", 
-                self.exchange.fetch_positions, 
-                ttl=60
-            )
+            # Direct call to exchange without caching for simplicity
+            positions = self.exchange.fetch_positions()
             
             openSymbols = set()
-            messages(f"[DEBUG] Exchange returned {len(positions)} positions (cached)", console=0, log=1, telegram=0)
+            messages(f"[DEBUG] Exchange returned {len(positions)} positions", console=0, log=1, telegram=0)
             
             for pos in positions:
                 symbol = pos.get('symbol', '')

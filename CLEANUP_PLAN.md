@@ -18,26 +18,30 @@ Eliminar toda la complejidad innecesaria y crear un sistema simple basado en:
 
 ## FASE 2: LIMPIEZA DE FUNCIONES EN ARCHIVOS PRINCIPALES
 ### orderManager.py
-- [ ] Eliminar: cleanClosedPositions()
-- [ ] Eliminar: _checkOrderStatusForClosure()
-- [ ] Eliminar: reconstructMissingPositions() calls
-- [ ] Eliminar: notifiedTracker imports y calls
-- [ ] Simplificar: updatePositions()
-- [ ] Crear: checkOrderStatus() - nueva función simple
-- [ ] Crear: cleanClosedPositions() - nueva versión simple
+- [x] Eliminar: cleanClosedPositions() - COMPLETADO
+- [x] Eliminar: _checkOrderStatusForClosure() - COMPLETADO
+- [x] Eliminar: reconstructMissingPositions() calls - COMPLETADO
+- [x] Eliminar: notifiedTracker imports y calls - COMPLETADO
+- [x] Simplificar: updatePositions() - COMPLETADO
+- [x] Crear: checkOrderStatus() - nueva función simple - COMPLETADO
+- [x] Crear: cleanClosedPositions() - nueva versión simple - COMPLETADO
 
 ### helpers.py
-- [ ] Eliminar comandos: sync, cleanup, tracker, cleartracker
-- [ ] Mantener comandos esenciales
+- [x] Eliminar comandos: sync, cleanup, tracker, cleartracker - COMPLETADO
+- [x] Mantener comandos esenciales - COMPLETADO
 
 ### bot.py
-- [ ] Eliminar imports de archivos eliminados
-- [ ] Eliminar positionSyncer scheduling
-- [ ] Agregar nuevo scheduling simple
+- [x] Eliminar imports de archivos eliminados - COMPLETADO
+- [x] Eliminar positionSyncer scheduling - COMPLETADO
+- [x] Agregar nuevo scheduling simple - COMPLETADO
 
 ### pairs.py
-- [ ] Eliminar referencias a tracker o sync
-- [ ] Limpiar lógica innecesaria
+- [x] Eliminar referencias a tracker o sync - COMPLETADO
+- [x] Limpiar lógica innecesaria - COMPLETADO
+
+### Archivos adicionales limpiados:
+- [x] initTracker.py - Marcado como obsoleto - COMPLETADO
+- [x] apiOptimizer.py - Eliminado sistema de caché - COMPLETADO
 
 ## FASE 3: IMPLEMENTACIÓN DEL NUEVO SISTEMA
 ### Estructura del JSON modificada:

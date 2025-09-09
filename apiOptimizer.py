@@ -1,4 +1,8 @@
-from cacheManager import cachedCall
+"""
+ARCHIVO SIMPLIFICADO - Se eliminó el sistema de caché para mayor simplicidad
+Ahora todas las llamadas van directamente al exchange sin caché intermedio
+"""
+
 from connector import bingxConnector
 from logManager import messages
 import time
@@ -8,32 +12,20 @@ class ApiOptimizer:
         self.exchange = exchange
     
     def getTicker(self, symbol):
-        """Get real-time ticker - NO CACHING for price data"""
+        """Get real-time ticker - Direct call to exchange"""
         return self.exchange.fetch_ticker(symbol)
     
-    def getPositionsCached(self, ttl=60):
-        """Get positions with 60-second caching - positions don't change frequently"""
-        return cachedCall(
-            "exchange_positions", 
-            self.exchange.fetch_positions, 
-            ttl=ttl
-        )
+    def getPositions(self):
+        """Get positions - Direct call to exchange"""
+        return self.exchange.fetch_positions()
     
-    def getBalanceCached(self, ttl=180):
-        """Get balance with aggressive caching - balance changes only with trades"""
-        return cachedCall(
-            "exchange_balance", 
-            self.exchange.fetch_balance, 
-            ttl=ttl
-        )
+    def getBalance(self):
+        """Get balance - Direct call to exchange"""
+        return self.exchange.fetch_balance()
     
-    def getMarketsCached(self, ttl=3600):
-        """Get markets with very aggressive caching - markets rarely change"""
-        return cachedCall(
-            "exchange_markets", 
-            self.exchange.load_markets, 
-            ttl=ttl
-        )
+    def getMarkets(self):
+        """Get markets - Direct call to exchange"""
+        return self.exchange.load_markets()
 
 # Global instance
 apiOptimizer = None
@@ -43,16 +35,13 @@ def initializeApiOptimizer(exchange):
     apiOptimizer = ApiOptimizer(exchange)
     
 def getOptimizedPositions():
-    """Get cached positions - reduces API calls significantly"""
+    """Get positions - Direct call without caching"""
     if apiOptimizer:
-        return apiOptimizer.getPositionsCached()
+        return apiOptimizer.getPositions()
     return None
 
 def getOptimizedBalance():
-    """Get cached balance - reduces API calls significantly"""
+    """Get balance - Direct call without caching"""
     if apiOptimizer:
-        return apiOptimizer.getBalanceCached()
-    return None
-    if apiOptimizer:
-        return apiOptimizer.getTickerCached(symbol)
+        return apiOptimizer.getBalance()
     return None

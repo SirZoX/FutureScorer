@@ -8,7 +8,7 @@ from configManager import configManager
 from validators import validateSymbol, validateOhlcvData, sanitizeSymbol
 from logManager import messages
 from exceptions import DataValidationError, ExchangeConnectionError
-from cacheManager import cachedCall, cacheManager
+# from cacheManager import cachedCall, cacheManager  # REMOVED - no longer needed
 import pandas as pd
 
 
@@ -211,7 +211,7 @@ def analyzePairs():
         try:
             # Use cached OHLCV data to reduce API calls
             cache_key = f"ohlcv_{pair}_{timeframe}_{requestedCandles}"
-            ohlcv = cachedCall(cache_key, exchange.fetch_ohlcv, 300, pair, timeframe, None, requestedCandles)
+            ohlcv = exchange.fetch_ohlcv(pair, timeframe, None, requestedCandles)  # Direct call without cache
         except Exception as e:
             return {"pair": pair, "reason": f"OHLCV error: {e}"}
 
@@ -765,7 +765,7 @@ def updatePairs():
 
     # Obtener volúmenes de todos los pares filtrados usando cache
     try:
-        tickers = cachedCall("exchange_tickers", exchange.fetch_tickers, ttl=60)  # Cache for 1 minute
+        tickers = exchange.fetch_tickers()  # Direct call without cache
         messages(f"Tickers fetched: {len(tickers)}", console=0, log=1, telegram=0, pair="")
     except Exception as e:
         messages(f"Error fetching tickers: {e}", console=1, log=1, telegram=0)
