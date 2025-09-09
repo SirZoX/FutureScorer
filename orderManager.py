@@ -14,7 +14,6 @@ from configManager import configManager
 from logManager import messages
 from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
-from apiOptimizer import getOptimizedPositions
 from fileManager import notifyPositionClosure
 
 from datetime import datetime
@@ -81,10 +80,6 @@ class OrderManager:
 
         # Reconcile local JSON with exchange state
         self.updatePositions()
-        
-        # Initialize API optimizer for caching
-        from apiOptimizer import initializeApiOptimizer
-        initializeApiOptimizer(self.exchange)
 
     def fetchOrderWithRetry(self, orderId, symbol, maxRetries=3, delay=2):
         """
