@@ -226,7 +226,7 @@ class OrderManager:
             potentialClosedSymbols = localSymbols - exchangeOpenSymbols
             
             if potentialClosedSymbols:
-                messages(f"[DEBUG] Potentially closed positions detected: {potentialClosedSymbols}", console=0, log=1, telegram=0)
+                messages(f"[CLEANUP] Potentially closed positions detected: {potentialClosedSymbols}", console=1, log=1, telegram=0)
                 
                 # Enhanced safety check: only remove positions with confirmed closing trades
                 currentTime = time.time()
@@ -237,6 +237,8 @@ class OrderManager:
                     position = self.positions.get(symbol, {})
                     openTime = position.get('open_ts_unix', currentTime)
                     timeSinceOpen = currentTime - openTime
+                    
+                    messages(f"[CLEANUP] Evaluating {symbol}: reconstructed={position.get('reconstructed', False)}, timeSinceOpen={timeSinceOpen/3600:.1f}h", console=1, log=1, telegram=0)
                     
                     # Skip if already notified to avoid duplicate notifications
                     if position.get('notified', False) or position.get('notification_sent', False):
@@ -251,8 +253,8 @@ class OrderManager:
                             try:
                                 reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
                                 reconstructAgeHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
-                                if reconstructAgeHours < 2:  # Give 2 hours grace period
-                                    messages(f"[DEBUG] Position {symbol} is recently reconstructed ({reconstructAgeHours:.1f}h ago), skipping cleanup", console=0, log=1, telegram=0)
+                                if reconstructAgeHours < 4:  # Increased grace period to 4 hours
+                                    messages(f"[CLEANUP] Position {symbol} is recently reconstructed ({reconstructAgeHours:.1f}h ago), skipping cleanup", console=1, log=1, telegram=0)
                                     continue
                             except Exception as e:
                                 messages(f"[DEBUG] Error parsing reconstruction date for {symbol}: {e}", console=0, log=1, telegram=0)
@@ -294,13 +296,13 @@ class OrderManager:
                     self.notifyPositionClosed(symbol)
                 
                 if symbolsToRemove:
-                    messages(f"Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=0, log=1, telegram=0)
+                    messages(f"[CLEANUP] Found {len(symbolsToRemove)} positions to clean: {', '.join(symbolsToRemove)}", console=1, log=1, telegram=0)
                     for symbol in symbolsToRemove:
-                        messages(f"Removing closed position {symbol} from local file", pair=symbol, console=0, log=1, telegram=0)
+                        messages(f"[CLEANUP] Removing closed position {symbol} from local file", pair=symbol, console=1, log=1, telegram=0)
                         self.positions.pop(symbol, None)
                     
                     self.savePositions()
-                    messages(f"Cleaned {len(symbolsToRemove)} closed positions from local file", console=0, log=1, telegram=0)
+                    messages(f"[CLEANUP] Cleaned {len(symbolsToRemove)} closed positions from local file", console=1, log=1, telegram=0)
                 else:
                     messages("No positions old enough to be safely removed", console=0, log=1, telegram=0)
             else:
