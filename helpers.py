@@ -62,6 +62,38 @@ def checkTelegram():
                             messages("❌ OrderManager not available for sync", console=0, log=0, telegram=1)
                     except Exception as e:
                         messages(f"❌ Position sync failed: {e}", console=0, log=0, telegram=1)
+                elif text == 'cleanup':
+                    from tradesCleanup import removeDuplicateTradesFromCSV
+                    try:
+                        duplicatesRemoved = removeDuplicateTradesFromCSV()
+                        if duplicatesRemoved > 0:
+                            messages(f"✅ Cleaned {duplicatesRemoved} duplicate trades from CSV", console=0, log=0, telegram=1)
+                        else:
+                            messages("✅ No duplicate trades found in CSV", console=0, log=0, telegram=1)
+                    except Exception as e:
+                        messages(f"❌ Cleanup failed: {e}", console=0, log=0, telegram=1)
+                elif text == 'duplicates':
+                    from tradesCleanup import analyzeTradesDuplicates
+                    try:
+                        duplicateGroups = analyzeTradesDuplicates()
+                        if duplicateGroups:
+                            msg = f"📊 Found {len(duplicateGroups)} groups of duplicate trades:\n"
+                            for group in duplicateGroups[:5]:  # Show first 5 groups
+                                msg += f"• {group['symbol']}: {group['count']} duplicates (profit: {group['profit']})\n"
+                            if len(duplicateGroups) > 5:
+                                msg += f"... and {len(duplicateGroups) - 5} more groups"
+                            messages(msg, console=0, log=0, telegram=1)
+                        else:
+                            messages("✅ No duplicate trades found", console=0, log=0, telegram=1)
+                    except Exception as e:
+                        messages(f"❌ Duplicate analysis failed: {e}", console=0, log=0, telegram=1)
+                elif text == 'tracker':
+                    from notifiedTracker import getNotifiedPositionsStats
+                    try:
+                        stats = getNotifiedPositionsStats()
+                        messages(f"📋 Notified positions tracker:\n• Total: {stats['total']}\n• Recent (24h): {stats['recent']}", console=0, log=0, telegram=1)
+                    except Exception as e:
+                        messages(f"❌ Tracker stats failed: {e}", console=0, log=0, telegram=1)
     except Exception as e:
         messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
     

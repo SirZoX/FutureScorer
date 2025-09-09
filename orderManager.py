@@ -17,6 +17,7 @@ from exceptions import OrderExecutionError, InsufficientBalanceError, DataValida
 from cacheManager import cachedCall
 from apiOptimizer import getOptimizedPositions
 from notificationManager import notifyPositionClosure, notifyPositionClosureSimple
+from notifiedTracker import markPositionAsNotified
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -794,6 +795,11 @@ class OrderManager:
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, close_reason, profitQuote)
                 
+                # Mark position as notified in tracker to prevent duplicates from sync
+                openPrice = float(position.get('openPrice', 0))
+                openTimestamp = position.get('open_ts_unix', 0)
+                markPositionAsNotified(symbol, openPrice, openTimestamp, profitQuote)
+                
                 with self.positions_lock:
                     position['notified'] = True
                     position['notification_sent'] = True  # Permanent flag to prevent duplicates
@@ -1353,6 +1359,11 @@ class OrderManager:
                     # Log the trade to trades.csv
                     self.logTradeFromPosition(symbol, position, orderType, pnlUsdt)
                     
+                    # Mark position as notified in tracker to prevent duplicates from sync
+                    openPrice = float(position.get('openPrice', 0))
+                    openTimestamp = position.get('open_ts_unix', 0)
+                    markPositionAsNotified(symbol, openPrice, openTimestamp, pnlUsdt)
+                    
                     # Update selectionLog with close data
                     try:
                         # Construct recordId from position TP/SL order IDs
@@ -1465,6 +1476,11 @@ class OrderManager:
                 # Log the trade to trades.csv
                 self.logTradeFromPosition(symbol, position, "SYNC", netProfitQuote)
                 
+                # Mark position as notified in tracker to prevent duplicates from sync
+                openPrice = float(position.get('openPrice', 0))
+                openTimestamp = position.get('open_ts_unix', 0)
+                markPositionAsNotified(symbol, openPrice, openTimestamp, netProfitQuote)
+                
                 # Update selectionLog with close data
                 try:
                     # Construct recordId from position TP/SL order IDs
@@ -1495,6 +1511,11 @@ class OrderManager:
             
             # Mark as notified
             with self.positions_lock:
+                # Mark position as notified in tracker to prevent duplicates from sync
+                openPrice = float(position.get('openPrice', 0))
+                openTimestamp = position.get('open_ts_unix', 0)
+                markPositionAsNotified(symbol, openPrice, openTimestamp, 0)  # 0 profit when we can't calculate
+                
                 position['notified'] = True
                 position['notification_sent'] = True
                 position.pop('processing_notification', None)

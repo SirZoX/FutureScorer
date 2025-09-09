@@ -5,6 +5,7 @@ from datetime import datetime
 from logManager import messages
 from gvars import positionsFile, selectionLogFile
 from cacheManager import cachedCall
+from notifiedTracker import isPositionAlreadyNotified, cleanOldNotifiedPositions
 
 # Global cache to track recently reconstructed positions
 _recently_reconstructed = {}
@@ -178,6 +179,14 @@ def reconstructMissingPositions(orderManager, missingSymbols):
                         break
                 
                 if openingTrade:
+                    # CRITICAL: Check if this position was already notified to prevent duplicates
+                    openPrice = float(openingTrade.get('price', 0))
+                    openTimestamp = int(openingTrade.get('timestamp', time.time()) / 1000)
+                    
+                    if isPositionAlreadyNotified(symbol, openPrice, openTimestamp):
+                        messages(f"[SYNC] Skipping reconstruction of {symbol} - position already notified and closed", console=1, log=1, telegram=0)
+                        continue
+                    
                     # Try to get additional data from selectionLog
                     selectionData = getSelectionLogData(symbol, openingTrade.get('datetime', ''))
                     
@@ -245,6 +254,9 @@ def syncPositions(orderManager):
     """
     Main synchronization function - checks discrepancies and fixes them
     """
+    # Clean old notified positions periodically (every sync, but function handles frequency internally)
+    cleanOldNotifiedPositions()
+    
     localCount, exchangeCount, missingInLocal, extraInLocal = checkPositionDiscrepancies(orderManager)
     
     # Log status (reduced verbosity)
