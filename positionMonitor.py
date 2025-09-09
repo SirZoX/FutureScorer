@@ -206,6 +206,36 @@ def notifyClosedPositions():
         except Exception as e:
             messages(f"[NOTIFY] Error saving notification updates: {e}", console=1, log=1, telegram=0)
 
+def managePositionsSequentially():
+    """
+    NUEVA FUNCIÓN MAESTRA: Ejecuta todas las tareas de gestión de posiciones secuencialmente
+    Evita conflictos de concurrencia al ejecutar todo en orden:
+    1. Verificar estado de órdenes
+    2. Notificar posiciones cerradas  
+    3. Limpiar posiciones notificadas
+    """
+    from logManager import messages
+    
+    try:
+        messages("[POSITION-MANAGER] Starting sequential position management cycle", console=0, log=1, telegram=0)
+        
+        # Paso 1: Verificar estado de órdenes TP/SL
+        messages("[POSITION-MANAGER] Step 1: Checking order status", console=0, log=1, telegram=0)
+        checkOrderStatusPeriodically()
+        
+        # Paso 2: Notificar posiciones cerradas
+        messages("[POSITION-MANAGER] Step 2: Notifying closed positions", console=0, log=1, telegram=0)
+        notifyClosedPositions()
+        
+        # Paso 3: Limpiar posiciones notificadas
+        messages("[POSITION-MANAGER] Step 3: Cleaning notified positions", console=0, log=1, telegram=0)
+        cleanNotifiedPositions()
+        
+        messages("[POSITION-MANAGER] Sequential position management cycle completed", console=0, log=1, telegram=0)
+        
+    except Exception as e:
+        messages(f"[POSITION-MANAGER] Error in sequential management: {e}", console=1, log=1, telegram=0)
+
 def cleanNotifiedPositions():
     """
     NUEVA FUNCIÓN SIMPLE: Elimina posiciones cerradas y notificadas

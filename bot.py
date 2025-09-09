@@ -319,19 +319,13 @@ if __name__ == "__main__":
     schedule.every().day.at("00:00").do(orderManager.updateDailyBalance)
     schedule.every(10).seconds.do(helpers.checkTelegram)
     
-    # NEW SIMPLIFIED SYSTEM: Schedule order checking and position management
-    from positionMonitor import checkOrderStatusPeriodically, notifyClosedPositions, cleanNotifiedPositions
+    # NEW SIMPLIFIED SYSTEM: Sequential position management every 4 minutes
+    from positionMonitor import managePositionsSequentially
     
-    # Check order status every 2 minutes
-    schedule.every(2).minutes.do(checkOrderStatusPeriodically)
+    # Execute all position management tasks sequentially every 4 minutes
+    schedule.every(4).minutes.do(managePositionsSequentially)
     
-    # Notify closed positions every 3 minutes  
-    schedule.every(3).minutes.do(notifyClosedPositions)
-    
-    # Clean notified positions every 10 minutes
-    schedule.every(10).minutes.do(cleanNotifiedPositions)
-    
-    messages("New simplified position management system scheduled", console=1, log=1, telegram=0)
+    messages("Sequential position management system scheduled (every 4 minutes)", console=1, log=1, telegram=0)
     
     # Set orderManager reference for telegram commands
     import helpers
