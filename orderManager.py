@@ -14,10 +14,8 @@ from configManager import configManager
 from logManager import messages
 from validators import validateTradingParameters, validateSymbol, sanitizeSymbol
 from exceptions import OrderExecutionError, InsufficientBalanceError, DataValidationError
-from cacheManager import cachedCall
 from apiOptimizer import getOptimizedPositions
-from notificationManager import notifyPositionClosure, notifyPositionClosureSimple
-from notifiedTracker import markPositionAsNotified
+from fileManager import notifyPositionClosure
 
 from datetime import datetime
 from decimal import Decimal, ROUND_DOWN
@@ -619,6 +617,18 @@ class OrderManager:
                 # Re-check after acquiring lock to prevent race conditions
                 current_position = self.positions.get(symbol, {})
                 
+                # CRITICAL: Protect recently reconstructed positions
+                reconstructDate = current_position.get('reconstruct_date', '')
+                if reconstructDate:
+                    try:
+                        reconstructTime = datetime.fromisoformat(reconstructDate.replace('Z', '+00:00'))
+                        ageHours = (datetime.utcnow() - reconstructTime.replace(tzinfo=None)).total_seconds() / 3600
+                        if ageHours < 4:  # 4-hour grace period for reconstructed positions
+                            messages(f"[PROTECTION] Skipping elimination of recently reconstructed position {symbol} (age: {ageHours:.1f}h)", pair=symbol, console=0, log=1, telegram=0)
+                            continue
+                    except Exception as e:
+                        messages(f"[DEBUG] Error parsing reconstruct_date for {symbol}: {e}", pair=symbol, console=0, log=1, telegram=0)
+                
                 # Create unique identifier for this position (symbol + opening timestamp)
                 position_id = f"{symbol}_{current_position.get('open_ts_unix', '')}"
                 
@@ -860,6 +870,17 @@ class OrderManager:
             if len(self.positions) >= self.maxOpen:
                 messages(f"Skipping openPosition for {symbol}: max open positions reached ({self.maxOpen})", console=1, log=1, telegram=0, pair=symbol)
                 return None
+            
+            # CRITICAL: Double-check if position exists on exchange to prevent duplicates
+            try:
+                exchangePositions = self.exchange.fetch_positions([symbol])
+                for pos in exchangePositions:
+                    if pos.get('symbol') == symbol and float(pos.get('contracts', 0)) > 0:
+                        messages(f"[CRITICAL] Skipping {symbol}: position already exists on exchange with {pos.get('contracts')} contracts", console=1, log=1, telegram=0, pair=symbol)
+                        return None
+                messages(f"[DEBUG] Verified no existing position for {symbol} on exchange", console=0, log=1, telegram=0, pair=symbol)
+            except Exception as e:
+                messages(f"[WARNING] Could not verify exchange position for {symbol}: {e}", console=0, log=1, telegram=0, pair=symbol)
             
             # Reserve the symbol to prevent other threads from opening the same position
             self.positions[symbol] = {'status': 'opening', 'timestamp': datetime.now().isoformat()}

@@ -320,8 +320,17 @@ if __name__ == "__main__":
     schedule.every(10).seconds.do(helpers.checkTelegram)
     
     # Schedule position synchronization every 5 minutes
-    from positionSyncer import schedulePositionSync
+    from positionSyncer import schedulePositionSync, performInitialSync
     positionSyncFunction = schedulePositionSync(orderManager, intervalMinutes=5)
+    
+    # CRITICAL: Perform initial position sync at startup to prevent duplicates
+    messages("Executing initial position sync to prevent duplicates...", console=1, log=1, telegram=0)
+    try:
+        performInitialSync(orderManager)
+        messages("Initial position sync completed successfully", console=1, log=1, telegram=0)
+    except Exception as e:
+        messages(f"[ERROR] Initial position sync failed: {e}", console=1, log=1, telegram=0)
+    
     schedule.every(5).minutes.do(positionSyncFunction)
     
     # Set orderManager reference for telegram commands
