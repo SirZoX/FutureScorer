@@ -651,31 +651,91 @@ class OrderManager:
         leverage = int(self.config.get('leverage', 10))
         orderSide = 'buy' if side == 'long' else 'sell'
         positionSide = 'LONG' if side == 'long' else 'SHORT'
-        try:
-            hedgeSide = positionSide if positionSide in ['LONG', 'SHORT'] else 'BOTH'
-            self.exchange.set_leverage(leverage, symbol, params={'side': hedgeSide})
-            orderResp = self.exchange.create_order(
-                symbol=symbol,
-                type='market',
-                side=orderSide,
-                amount=amount,
-                params={
-                    'positionSide': positionSide,
-                    'newClientOrderId': clientId
-                }
-            )
-            # Log complete order response
-            messages(f"[DEBUG] Complete order response for {symbol}: {orderResp}", pair=symbol, console=0, log=1, telegram=0)
-            
-            filled    = Decimal(str(orderResp.get('filled') or orderResp.get('amount') or 0))
-            openPrice = Decimal(str(orderResp.get('price') or price))
-            messages(f"  ➡️   Futures order executed for {symbol}: side={side}, filled={filled}, price={openPrice}, leverage={leverage}", pair=symbol, console=1, log=1, telegram=0)
-        except Exception as e:
-            messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
-            # Clean up reservation
-            with self.positions_lock:
-                self.positions.pop(symbol, None)
-            return None
+        
+        # Variable to track if we need to retry with adjusted amount
+        retryWithAdjustedAmount = True
+        maxRetries = 3
+        retryCount = 0
+        
+        while retryWithAdjustedAmount and retryCount < maxRetries:
+            try:
+                hedgeSide = positionSide if positionSide in ['LONG', 'SHORT'] else 'BOTH'
+                self.exchange.set_leverage(leverage, symbol, params={'side': hedgeSide})
+                orderResp = self.exchange.create_order(
+                    symbol=symbol,
+                    type='market',
+                    side=orderSide,
+                    amount=amount,
+                    params={
+                        'positionSide': positionSide,
+                        'newClientOrderId': clientId
+                    }
+                )
+                # If we reach here, order was successful
+                retryWithAdjustedAmount = False
+                
+                # Log complete order response
+                messages(f"[DEBUG] Complete order response for {symbol}: {orderResp}", pair=symbol, console=0, log=1, telegram=0)
+                
+                filled    = Decimal(str(orderResp.get('filled') or orderResp.get('amount') or 0))
+                openPrice = Decimal(str(orderResp.get('price') or price))
+                messages(f"  ➡️   Futures order executed for {symbol}: side={side}, filled={filled}, price={openPrice}, leverage={leverage}", pair=symbol, console=1, log=1, telegram=0)
+                
+            except Exception as e:
+                errorStr = str(e)
+                
+                # Check if error is about maximum position value exceeded (code 101209)
+                if "101209" in errorStr and "maximum position value" in errorStr.lower():
+                    retryCount += 1
+                    messages(f"[POSITION-LIMIT] Attempt {retryCount}: Position value exceeds maximum for {symbol} at leverage {leverage}", console=1, log=1, telegram=0, pair=symbol)
+                    
+                    # Extract maximum allowed position value from error message if possible
+                    # Error format: "The maximum position value for this leverage is 1000 USDT."
+                    import re
+                    maxValueMatch = re.search(r'(\d+(?:\.\d+)?)\s+USDT', errorStr)
+                    
+                    if maxValueMatch and retryCount < maxRetries:
+                        maxAllowedValue = float(maxValueMatch.group(1))
+                        messages(f"[POSITION-LIMIT] Maximum allowed position value: {maxAllowedValue} USDT", console=1, log=1, telegram=0, pair=symbol)
+                        
+                        # Adjust position value to 95% of maximum to ensure it fits
+                        adjustedPositionValue = maxAllowedValue * 0.95
+                        adjustedInvestment = adjustedPositionValue / leverage
+                        
+                        # Recalculate amount based on adjusted position value
+                        newRawAmt = Decimal(str(adjustedPositionValue)) / price
+                        newAmtDec = newRawAmt.quantize(stepSize, rounding=ROUND_DOWN) if stepSize else newRawAmt
+                        
+                        # Ensure it's still above minimum quantity
+                        if minQty and newAmtDec < minQty:
+                            messages(f"[POSITION-LIMIT] Adjusted amount {newAmtDec} below minimum {minQty}, usando mínimo", console=1, log=1, telegram=0, pair=symbol)
+                            newAmtDec = minQty
+                            adjustedPositionValue = float(newAmtDec) * float(price)
+                            adjustedInvestment = adjustedPositionValue / leverage
+                        
+                        amount = float(newAmtDec)
+                        finalPositionUSDT = adjustedPositionValue
+                        investUSDC = adjustedInvestment
+                        
+                        messages(f"[POSITION-LIMIT] Adjusted values: investment={investUSDC:.2f} USDT, position_value={finalPositionUSDT:.2f} USDT, amount={amount}", console=1, log=1, telegram=1, pair=symbol)
+                        
+                        # Generate new client ID for retry
+                        clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
+                        continue
+                    else:
+                        # Could not extract max value or max retries reached
+                        messages(f"[POSITION-LIMIT] Could not adjust position for {symbol} after {retryCount} attempts", console=1, log=1, telegram=1, pair=symbol)
+                        retryWithAdjustedAmount = False
+                else:
+                    # Different error, don't retry
+                    retryWithAdjustedAmount = False
+                
+                if not retryWithAdjustedAmount or retryCount >= maxRetries:
+                    messages(f"Error executing futures order for {symbol}: {e}", console=1, log=1, telegram=0, pair=symbol)
+                    # Clean up reservation
+                    with self.positions_lock:
+                        self.positions.pop(symbol, None)
+                    return None
 
         # 6) Calculate TP/SL teniendo en cuenta el leverage y side
         tpPct = Decimal(str(self.config.get('tp1', 0.02)))
