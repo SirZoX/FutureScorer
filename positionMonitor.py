@@ -172,7 +172,7 @@ def checkOrderStatusPeriodically():
                     pos['notification_sent'] = False
                 positionsUpdated = True
                 
-                messages(f"[ORDER-CHECK] Position {symbol} marked as closed ({pos['close_reason']})", console=1, log=1, telegram=0)
+                messages(f"[ORDER-CHECK] Position {symbol} marked as closed ({pos['close_reason']})", console=0, log=1, telegram=0)
         
         except Exception as e:
             messages(f"[ORDER-CHECK] Error processing {symbol}: {e}", console=0, log=1, telegram=0)
@@ -253,7 +253,7 @@ def notifyClosedPositions():
                     pos['notification_sent'] = True
                     positionsUpdated = True
                     
-                    messages(f"[NOTIFY] Sent notification for closed position {symbol}", console=1, log=1, telegram=0)
+                    messages(f"[NOTIFY] Sent notification for closed position {symbol}", console=0, log=1, telegram=0)
                     
                 except Exception as e:
                     messages(f"[NOTIFY] Failed to notify {symbol}: {e}", console=1, log=1, telegram=0)
@@ -326,7 +326,7 @@ def cleanNotifiedPositions():
         try:
             with open(positionsFile, 'w', encoding='utf-8') as f:
                 json.dump(positions, f, indent=2)
-            messages(f"[CLEANUP] Removed {len(toRemove)} closed and notified positions: {toRemove}", console=1, log=1, telegram=0)
+            messages(f"[CLEANUP] Removed {len(toRemove)} closed and notified positions: {toRemove}", console=0, log=1, telegram=0)
         except Exception as e:
             messages(f"[CLEANUP] Error saving cleaned positions: {e}", console=1, log=1, telegram=0)
     else:
