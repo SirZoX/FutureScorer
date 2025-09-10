@@ -34,6 +34,7 @@ pairAnalysisSleepTime = 0.05               # Reduced from 0.12 to 0.05 for bette
 
 
 clientPrefix = "SCBot_"
+orderPrefix = "FUTSCO"
 _line_ = "*"*120
 
 # Position monitor table column widths

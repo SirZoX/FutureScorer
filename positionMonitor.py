@@ -94,30 +94,38 @@ def checkOrderStatusPeriodically():
                 pos['status'] = 'open'
                 positionsUpdated = True
             
-            # Get order IDs (prioritize active orders)
+            # Get order IDs (prioritize custom IDs, then regular IDs)
             tpOrderId = pos.get('tpOrderId2') or pos.get('tpOrderId1')
             slOrderId = pos.get('slOrderId2') or pos.get('slOrderId1')
             
-            if not tpOrderId and not slOrderId:
+            # NEW: Get custom IDs for more reliable tracking
+            tpCustomId = pos.get('tpCustomId')
+            slCustomId = pos.get('slCustomId')
+            
+            if not tpOrderId and not slOrderId and not tpCustomId and not slCustomId:
                 continue
             
             # Check TP order status
             tpStatus = None
             tpExecuted = False
-            if tpOrderId:
+            if tpCustomId or tpOrderId:
                 try:
-                    tpOrder, error = safeApiCall(exchange.fetch_order, tpOrderId, symbol)
+                    # Try custom ID first, fallback to regular ID
+                    orderIdToCheck = tpCustomId if tpCustomId else tpOrderId
+                    idType = "custom" if tpCustomId else "regular"
+                    
+                    tpOrder, error = safeApiCall(exchange.fetch_order, orderIdToCheck, symbol)
                     if error:
                         # Check if error indicates order was executed (order not exist)
                         if "order not exist" in str(error).lower() or "80016" in str(error):
                             tpExecuted = True
                             tpStatus = 'executed'
-                            messages(f"[ORDER-CHECK] {symbol} TP order {tpOrderId} was executed (order not exist)", console=0, log=1, telegram=0)
+                            messages(f"[ORDER-CHECK] {symbol} TP order {orderIdToCheck} ({idType} ID) was executed (order not exist)", console=0, log=1, telegram=0)
                         else:
-                            messages(f"[ORDER-CHECK] Error fetching TP order {tpOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
+                            messages(f"[ORDER-CHECK] Error fetching TP order {orderIdToCheck} ({idType} ID) for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
                         tpStatus = tpOrder.get('status')
-                        messages(f"[ORDER-CHECK] {symbol} TP order {tpOrderId} status: {tpStatus} (RAW: {tpOrder})", console=0, log=1, telegram=0)
+                        messages(f"[ORDER-CHECK] {symbol} TP order {orderIdToCheck} ({idType} ID) status: {tpStatus} (RAW: {tpOrder})", console=0, log=1, telegram=0)
                         if tpStatus in ['filled', 'closed']:
                             tpExecuted = True
                 except Exception as e:
@@ -126,20 +134,24 @@ def checkOrderStatusPeriodically():
             # Check SL order status  
             slStatus = None
             slExecuted = False
-            if slOrderId:
+            if slCustomId or slOrderId:
                 try:
-                    slOrder, error = safeApiCall(exchange.fetch_order, slOrderId, symbol)
+                    # Try custom ID first, fallback to regular ID
+                    orderIdToCheck = slCustomId if slCustomId else slOrderId
+                    idType = "custom" if slCustomId else "regular"
+                    
+                    slOrder, error = safeApiCall(exchange.fetch_order, orderIdToCheck, symbol)
                     if error:
                         # Check if error indicates order was executed (order not exist)
                         if "order not exist" in str(error).lower() or "80016" in str(error):
                             slExecuted = True
                             slStatus = 'executed'
-                            messages(f"[ORDER-CHECK] {symbol} SL order {slOrderId} was executed (order not exist)", console=0, log=1, telegram=0)
+                            messages(f"[ORDER-CHECK] {symbol} SL order {orderIdToCheck} ({idType} ID) was executed (order not exist)", console=0, log=1, telegram=0)
                         else:
-                            messages(f"[ORDER-CHECK] Error fetching SL order {slOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
+                            messages(f"[ORDER-CHECK] Error fetching SL order {orderIdToCheck} ({idType} ID) for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
                         slStatus = slOrder.get('status')
-                        messages(f"[ORDER-CHECK] {symbol} SL order {slOrderId} status: {slStatus} (RAW: {slOrder})", console=0, log=1, telegram=0)
+                        messages(f"[ORDER-CHECK] {symbol} SL order {orderIdToCheck} ({idType} ID) status: {slStatus} (RAW: {slOrder})", console=0, log=1, telegram=0)
                         if slStatus in ['filled', 'closed']:
                             slExecuted = True
                 except Exception as e:

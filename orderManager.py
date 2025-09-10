@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 
 from logManager import messages
-from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder, tradesLogFile
+from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder, tradesLogFile, orderPrefix
 from plotting import savePlot
 from configManager import configManager
 from logManager import messages
@@ -20,6 +20,26 @@ from decimal import Decimal, ROUND_DOWN
 ## Eliminada dependencia de python-binance, ahora se usa BingX
 from zoneinfo import ZoneInfo
 
+def generateCustomOrderId(symbol, orderType, timestamp):
+    """
+    Genera un ID personalizado para órdenes TP/SL
+    Format: FUTSCO_PAIR_TYPE_TIMESTAMP
+    
+    Args:
+        symbol: e.g., "WIF/USDT:USDT"
+        orderType: "TP" o "SL"
+        timestamp: timestamp unix
+    
+    Returns:
+        String con el ID personalizado, e.g., "FUTSCO_WIF_TP_1757536418"
+    """
+    # Extract clean pair name (remove /USDT:USDT and other suffixes)
+    cleanPair = symbol.replace("/USDT:USDT", "").replace("/USDT", "").replace("-USDT", "").replace(":", "")
+    
+    # Generate custom ID
+    customId = f"{orderPrefix}_{cleanPair}_{orderType}_{timestamp}"
+    
+    return customId
 
 
 class OrderManager:
@@ -702,6 +722,15 @@ class OrderManager:
 
         # 7) Place TP and SL orders (no OCO)
         tpId, slId = None, None
+        customTpId, customSlId = None, None
+        
+        # Generate timestamp for custom IDs
+        orderTimestamp = int(time.time())
+        
+        # Generate custom order IDs
+        customTpId = generateCustomOrderId(symbol, "TP", orderTimestamp)
+        customSlId = generateCustomOrderId(symbol, "SL", orderTimestamp)
+        
         try:
             tpOrder = self.exchange.create_order(
                 symbol=symbol,
@@ -710,13 +739,15 @@ class OrderManager:
                 amount=float(filled),
                 params={
                     'stopPrice': float(tpPrice),
-                    'positionSide': positionSide
+                    'positionSide': positionSide,
+                    'newClientOrderId': customTpId
                 }
             )
             # Log complete TP order response
             messages(f"[DEBUG] Complete TP order response for {symbol}: {tpOrder}", pair=symbol, console=0, log=1, telegram=0)
             tpId = tpOrder.get('id')
             messages(f"[DEBUG] TP order ID extracted: {tpId}", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[DEBUG] TP custom ID used: {customTpId}", pair=symbol, console=0, log=1, telegram=0)
             # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando TP: {e}", log=1)
@@ -728,13 +759,15 @@ class OrderManager:
                 amount=float(filled),
                 params={
                     'stopPrice': float(slPrice),
-                    'positionSide': positionSide
+                    'positionSide': positionSide,
+                    'newClientOrderId': customSlId
                 }
             )
             # Log complete SL order response
             messages(f"[DEBUG] Complete SL order response for {symbol}: {slOrder}", pair=symbol, console=0, log=1, telegram=0)
             slId = slOrder.get('id')
             messages(f"[DEBUG] SL order ID extracted: {slId}", pair=symbol, console=0, log=1, telegram=0)
+            messages(f"[DEBUG] SL custom ID used: {customSlId}", pair=symbol, console=0, log=1, telegram=0)
             # Solo mostrar mensaje si hay error
         except Exception as e:
             messages(f"[ERROR] Error creando SL: {e}", log=1)
@@ -748,8 +781,10 @@ class OrderManager:
             'slPrice':   float(slPrice),
             'tpOrderId1': tpId,
             'slOrderId1': slId,
+            'tpCustomId': customTpId,
+            'slCustomId': customSlId,
             'timestamp': datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S"),
-            'open_ts_unix': int(time.time()),
+            'open_ts_unix': orderTimestamp,  # Use the same timestamp as custom IDs
             'slope': slope if slope is not None else 0,
             'intercept': intercept if intercept is not None else 0,
             'tpPercent': float(tpPct) * 100,
