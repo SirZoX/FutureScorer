@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 
 from logManager import messages
-from gvars import configFile, positionsFile, dailyBalanceFile, clientPrefix, marketsFile, selectionLogFile, csvFolder, tradesLogFile
+from gvars import configFile, positionsFile, dailyBalanceFile, marketsFile, selectionLogFile, csvFolder, tradesLogFile
 from plotting import savePlot
 from configManager import configManager
 from logManager import messages
@@ -647,7 +647,6 @@ class OrderManager:
         messages(f"[DEBUG] Opening {symbol}: price={price}, amount={amtDec} (position_amount), margin_required={investUSDC}, position_value={finalPositionUSDT}", pair=symbol, console=0, log=1, telegram=0)
 
         # 5) Place futures order (long/short)
-        clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
         leverage = int(self.config.get('leverage', 10))
         orderSide = 'buy' if side == 'long' else 'sell'
         positionSide = 'LONG' if side == 'long' else 'SHORT'
@@ -667,8 +666,7 @@ class OrderManager:
                     side=orderSide,
                     amount=amount,
                     params={
-                        'positionSide': positionSide,
-                        'newClientOrderId': clientId
+                        'positionSide': positionSide
                     }
                 )
                 # If we reach here, order was successful
@@ -719,8 +717,7 @@ class OrderManager:
                         
                         messages(f"[POSITION-LIMIT] Adjusted values: investment={investUSDC:.2f} USDT, position_value={finalPositionUSDT:.2f} USDT, amount={amount}", console=0, log=1, telegram=0, pair=symbol)
                         
-                        # Generate new client ID for retry
-                        clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"
+                        # Continue with retry
                         continue
                     else:
                         # Could not extract max value or max retries reached

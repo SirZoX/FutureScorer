@@ -33,7 +33,6 @@ threadPoolMaxWorkers = 6                   # thread pool size for parallel proce
 pairAnalysisSleepTime = 0.05               # Reduced from 0.12 to 0.05 for better performance (50ms)
 
 
-clientPrefix = "SCBot_"
 _line_ = "*"*120
 
 # Position monitor table column widths
