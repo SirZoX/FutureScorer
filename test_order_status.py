@@ -11,8 +11,12 @@ def testFetchOrderStatus(orderId, symbol=None):
     Prueba fetchOrderStatus con un ID de orden específico
     """
     try:
+        # Detect sandbox mode
+        isSandboxMode = '-test' in sys.argv or '--sandbox' in sys.argv
+        
         print(f"Conectando a BingX...")
-        exchange = bingxConnector()
+        print(f"Modo: {'SANDBOX' if isSandboxMode else 'PRODUCCIÓN'}")
+        exchange = bingxConnector(isSandbox=isSandboxMode)
         print(f"Conectado exitosamente\n")
         
         print(f"Probando fetchOrderStatus con:")

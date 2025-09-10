@@ -12,6 +12,26 @@ lastApiCall = 0
 apiCallInterval = 1.0  # Minimum 1 second between API calls
 rateLimitBackoff = 60  # Start with 60 seconds backoff when rate limited
 
+def detectSandboxMode():
+    """
+    Detect if we're running in sandbox mode by checking command line args
+    or looking for sandbox indicators
+    """
+    # Check command line arguments
+    if '-test' in sys.argv or '--sandbox' in sys.argv:
+        return True
+    
+    # Check if any arg contains 'sandbox' or 'test'
+    for arg in sys.argv:
+        if 'sandbox' in arg.lower() or 'test' in arg.lower():
+            return True
+    
+    # Check environment variable if set
+    if os.environ.get('FUTSCO_SANDBOX', '').lower() in ['true', '1', 'yes']:
+        return True
+        
+    return False
+
 def checkRateLimit(errorMsg):
     """
     Check if error is rate limit related and extract backoff time
@@ -73,6 +93,11 @@ def checkOrderStatusPeriodically():
     if rateLimitBackoff > 60:
         return  # Skip this cycle if we're heavily rate limited
     
+    # Detect sandbox mode
+    isSandboxMode = detectSandboxMode()
+    if isSandboxMode:
+        messages("[ORDER-CHECK] Running in SANDBOX mode", console=0, log=1, telegram=0)
+    
     try:
         with open(positionsFile, 'r', encoding='utf-8') as f:
             positions = json.load(f)
@@ -80,7 +105,7 @@ def checkOrderStatusPeriodically():
         messages(f"[ORDER-CHECK] Error loading positions: {e}", console=1, log=1, telegram=0)
         return
     
-    exchange = bingxConnector()
+    exchange = bingxConnector(isSandbox=isSandboxMode)
     positionsUpdated = False
     
     for symbol, pos in positions.items():
