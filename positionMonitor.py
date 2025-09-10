@@ -103,34 +103,65 @@ def checkOrderStatusPeriodically():
             
             # Check TP order status
             tpStatus = None
+            tpExecuted = False
             if tpOrderId:
                 try:
                     tpOrder, error = safeApiCall(exchange.fetch_order, tpOrderId, symbol)
                     if error:
-                        messages(f"[ORDER-CHECK] Error fetching TP order {tpOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
+                        # Check if error indicates order was executed (order not exist)
+                        if "order not exist" in str(error).lower() or "80016" in str(error):
+                            tpExecuted = True
+                            tpStatus = 'executed'
+                            messages(f"[ORDER-CHECK] {symbol} TP order {tpOrderId} was executed (order not exist)", console=0, log=1, telegram=0)
+                        else:
+                            messages(f"[ORDER-CHECK] Error fetching TP order {tpOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
                         tpStatus = tpOrder.get('status')
                         messages(f"[ORDER-CHECK] {symbol} TP order {tpOrderId} status: {tpStatus} (RAW: {tpOrder})", console=0, log=1, telegram=0)
+                        if tpStatus in ['filled', 'closed']:
+                            tpExecuted = True
                 except Exception as e:
                     messages(f"[ORDER-CHECK] Exception checking TP order for {symbol}: {e}", console=0, log=1, telegram=0)
             
             # Check SL order status  
             slStatus = None
+            slExecuted = False
             if slOrderId:
                 try:
                     slOrder, error = safeApiCall(exchange.fetch_order, slOrderId, symbol)
                     if error:
-                        messages(f"[ORDER-CHECK] Error fetching SL order {slOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
+                        # Check if error indicates order was executed (order not exist)
+                        if "order not exist" in str(error).lower() or "80016" in str(error):
+                            slExecuted = True
+                            slStatus = 'executed'
+                            messages(f"[ORDER-CHECK] {symbol} SL order {slOrderId} was executed (order not exist)", console=0, log=1, telegram=0)
+                        else:
+                            messages(f"[ORDER-CHECK] Error fetching SL order {slOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
                         slStatus = slOrder.get('status')
                         messages(f"[ORDER-CHECK] {symbol} SL order {slOrderId} status: {slStatus} (RAW: {slOrder})", console=0, log=1, telegram=0)
+                        if slStatus in ['filled', 'closed']:
+                            slExecuted = True
                 except Exception as e:
                     messages(f"[ORDER-CHECK] Exception checking SL order for {symbol}: {e}", console=0, log=1, telegram=0)
             
-            # Update position status if any order is filled
-            if tpStatus in ['filled', 'closed'] or slStatus in ['filled', 'closed']:
+            # Update position status if any order was executed
+            if tpExecuted or slExecuted:
                 pos['status'] = 'closed'
-                pos['close_reason'] = 'TP' if tpStatus in ['filled', 'closed'] else 'SL'
+                # Determine which order was executed - priority to TP if both appear executed
+                if tpExecuted and slExecuted:
+                    # Both appear executed - use position comparison to determine which one actually closed it
+                    exchangePositions = exchange.fetch_positions()
+                    openSymbols = {p['symbol'] for p in exchangePositions if p.get('contracts', 0) > 0}
+                    if symbol not in openSymbols:
+                        pos['close_reason'] = 'TP'  # Default to TP when unsure
+                    else:
+                        continue  # Position still open, something wrong
+                elif tpExecuted:
+                    pos['close_reason'] = 'TP'
+                elif slExecuted:
+                    pos['close_reason'] = 'SL'
+                    
                 pos['close_time'] = datetime.now().isoformat()
                 if 'notification_sent' not in pos:
                     pos['notification_sent'] = False
