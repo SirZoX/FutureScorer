@@ -1,9 +1,8 @@
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import sys
-import threading
 import re
 from gvars import positionsFile
 import orderManager
