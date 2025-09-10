@@ -111,8 +111,6 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
     if not approvedOpportunities:
         return results
     
-    messages(f"Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=0, log=1, telegram=0)
-    
     for i, opportunity in enumerate(approvedOpportunities, 1):
         try:
             pair = opportunity['pair']
@@ -208,6 +206,7 @@ def analyzePairs():
     # from positionMonitor import monitorActive  # Disabled - position monitor removed
     import time
     startTime = time.time()
+    analysisStartTime = time.time()
     messages("Starting analysis", console=1, log=1, telegram=0)
     # monitorActive.clear()  # Disabled - position monitor removed
     dateTag = datetime.utcnow().date().isoformat()
@@ -747,9 +746,9 @@ def analyzePairs():
 
 
     # 8) Finish main processing
-    endTime = time.time()
-    elapsed = endTime - startTime
-    messages(f"End processing. Elapsed: {elapsed:.2f}s", console=1, log=1, telegram=0)
+    analysisEndTime = time.time()
+    analysisElapsed = analysisEndTime - analysisStartTime
+    messages(f"Analysis phase completed. Elapsed: {analysisElapsed:.2f}s", console=1, log=1, telegram=0)
     
     # 9) Generate plots for all opportunities asynchronously (non-blocking)
     if hasattr(analyzePairs, '_plotData') and analyzePairs._plotData:
@@ -766,7 +765,7 @@ def analyzePairs():
                     messages(f"Error generating delayed plot for {plotData.get('pair', 'unknown')}: {e}", console=0, log=1, telegram=0)
             
             plotElapsed = time.time() - plotStart
-            messages(f"Asynchronous plot generation completed. {plotCount} plots in {plotElapsed:.2f}s", console=0, log=1, telegram=0)
+            messages(f"Plot generation completed. {plotCount} plots generated in {plotElapsed:.2f}s", console=1, log=1, telegram=0)
             # Clear plot data after generation
             analyzePairs._plotData = []
         
@@ -775,15 +774,24 @@ def analyzePairs():
         plotThread.start()
         messages("Plot generation started in background thread", console=0, log=1, telegram=0)
     
-    messages(gvars._line_, console=1, log=1, telegram=0)
-    
     # ——— NEW: EXECUTION PHASE - Process approved opportunities sequentially ———
     if approvedOpportunities:
+        executionStartTime = time.time()
         messages(f"Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=1, log=1, telegram=0)
         executionResults = executeOpportunitiesSequentially(approvedOpportunities, configData)
-        messages(f"Execution phase completed: {executionResults['opened']} positions opened, {executionResults['failed']} failed", console=1, log=1, telegram=0)
+        executionEndTime = time.time()
+        executionElapsed = executionEndTime - executionStartTime
+        messages(f"Execution phase completed: {executionResults['opened']} positions opened, {executionResults['failed']} failed in {executionElapsed:.2f}s", console=1, log=1, telegram=0)
     else:
         messages("No opportunities approved for execution", console=1, log=1, telegram=0)
+    
+    # Calculate total elapsed time
+    totalEndTime = time.time()
+    totalElapsed = totalEndTime - startTime
+    messages(f"Total processing time: {totalElapsed:.2f}s", console=1, log=1, telegram=0)
+    
+    # Show the separator line AFTER all messages
+    messages(gvars._line_, console=1, log=1, telegram=0)
     
     # monitorActive.set()  # Disabled - position monitor removed
 

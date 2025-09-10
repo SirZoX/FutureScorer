@@ -4,12 +4,12 @@ Custom exceptions for FutureScorer bot.
 Provides specific error types for better error handling and debugging.
 """
 
-from logManager import messages
-
 class FutureScorerError(Exception):
     """Base exception for FutureScorer bot."""
     def __init__(self, message: str, console: int = 0, log: int = 1, telegram: int = 0):
         super().__init__(message)
+        # Import here to avoid circular import
+        from logManager import messages
         messages(f"[EXCEPTION] {self.__class__.__name__}: {message}", console=console, log=log, telegram=telegram)
 
 class ConfigurationError(FutureScorerError):
