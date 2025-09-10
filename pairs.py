@@ -100,23 +100,111 @@ def filterSignals(df):
 
 
 
+def executeOpportunitiesSequentially(approvedOpportunities, configData):
+    """
+    Execute all approved opportunities sequentially.
+    This includes position opening with automatic adjustment for position limits (error 101209)
+    Returns dict with 'opened' and 'failed' counts.
+    """
+    results = {'opened': 0, 'failed': 0}
+    
+    if not approvedOpportunities:
+        return results
+    
+    messages(f"📋 Processing {len(approvedOpportunities)} approved opportunities sequentially...", console=1, log=1, telegram=0)
+    
+    for i, opportunity in enumerate(approvedOpportunities, 1):
+        try:
+            pair = opportunity['pair']
+            messages(f"[{i}/{len(approvedOpportunities)}] Processing {pair}...", console=1, log=1, telegram=0, pair=pair)
+            
+            # Check if we've reached max positions
+            orderManager.updatePositions()
+            currentOpenPositions = len(orderManager.positions)
+            maxOpenPositions = configData.get('maxOpenPositions', 8)
+            
+            if currentOpenPositions >= maxOpenPositions:
+                messages(f"⚠️ Max positions reached ({currentOpenPositions}/{maxOpenPositions}). Stopping execution.", console=1, log=1, telegram=1)
+                break
+            
+            # Execute position opening with automatic retry logic for position limits
+            record = orderManager.openPosition(
+                opportunity['pair'], 
+                slope=opportunity['slope'], 
+                intercept=opportunity['intercept'], 
+                investmentPct=opportunity['investmentPct'], 
+                side=opportunity['side']
+            )
+            
+            if record:
+                results['opened'] += 1
+                messages(f"✅ [{i}/{len(approvedOpportunities)}] {pair} position opened successfully", console=1, log=1, telegram=1, pair=pair)
+                
+                # Generate plot and send notification
+                try:
+                    opp = opportunity['opp']
+                    symbolNorm = opportunity['symbolNorm']
+                    plotFileName = opportunity['plotFileName']
+                    usdcInvestment = opportunity['usdcInvestment']
+                    
+                    item = {
+                        **opp,
+                        "tpPrice": record["tpPrice"],
+                        "slPrice": record["slPrice"],
+                        "ma99": opp.get("ma99"),
+                        "momentum": opp.get("momentum"),
+                        "distance": opp.get("distancePct"),
+                        "touches": opp.get("touchesCount"),
+                        "volume": opp.get("volumeRatio"),
+                        "score": opp.get("score")
+                    }
+                    
+                    # Generate plot if CSV has data
+                    if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
+                        import os
+                        plotPath = os.path.join(gvars.plotsFolder, plotFileName)
+                        plotting.savePlot({**item, 'plotPath': plotPath})
+                        caption = (
+                            f"{symbolNorm}\n"
+                            f"Investment: {usdcInvestment:.1f} USDC (x{configData['leverage']})\n"
+                            f"Entry Price: {record['openPrice']}\n"
+                            f"TP: {record['tpPrice']}\n"
+                            f"SL: {record['slPrice']}"
+                        )
+                        messages([plotPath], console=0, log=1, telegram=2, caption=caption)
+                except Exception as e:
+                    messages(f"Error generating plot for {symbolNorm}: {e}", console=1, log=1, telegram=0, pair=symbolNorm)
+            else:
+                results['failed'] += 1
+                messages(f"❌ [{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=1, log=1, telegram=0, pair=pair)
+                
+        except Exception as e:
+            results['failed'] += 1
+            messages(f"❌ [{i}/{len(approvedOpportunities)}] Error processing {opportunity['pair']}: {e}", console=1, log=1, telegram=0, pair=opportunity['pair'])
+    
+    return results
+
+
 def analyzePairs():
     """
     1) Load daily selection
     2) For each pair: fetch OHLCV, filter, detect support, calculate metrics
     3) Sort by score
     4) Pre-compute bounceLow/bounceHigh and previous MA25
-    5) Open positions up to maxOpenPositions, and for each:
+    5) Collect approved opportunities in a list (analysis phase)
+    6) Process all opportunities sequentially (execution phase)
        • generate and send msg+image via messages()
-    6) Log everything in selectionLog.csv; plots are not deleted
+    7) Log everything in selectionLog.csv; plots are not deleted
     """
-
 
     # ——— 0) Limpiar carpeta de plots ———
     fileManager.deleteOldFiles(json=False, csv=True, plots=True)
     
     # Initialize plot data storage for delayed generation
     analyzePairs._plotData = []
+    
+    # Initialize list for approved opportunities to execute
+    approvedOpportunities = []
     
     # from positionMonitor import monitorActive  # Disabled - position monitor removed
     import time
@@ -383,8 +471,8 @@ def analyzePairs():
     # 4) Pre-calculate bounce bounds & MA25 (si lo necesitas, pero ya lo haces en processPair)
     #    (puedes omitir este paso si confías en los valores ya retornados)
 
-    # 5) Open positions AND generar plot para todas
-    nuevasAbiertas = 0
+    # 5) Analyze opportunities and collect approved ones for execution
+    approvedCount = 0
     # Exclusión para evitar procesamiento duplicado de símbolos
     import threading
     if not hasattr(analyzePairs, "processingSymbols"):
@@ -462,9 +550,9 @@ def analyzePairs():
         # Calculate filter results for logging
         filter1Passed = False  # Basic technical criteria
         filter2Passed = False  # Entry-specific criteria
-        filter1Passed = (opp["score"] >= scoreThreshold and posicionesYaAbiertas + nuevasAbiertas < configData["maxOpenPositions"])
+        filter1Passed = (opp["score"] >= scoreThreshold and posicionesYaAbiertas < configData["maxOpenPositions"])
 
-        # Attempt to open position according to filters
+        # Attempt to analyze opportunity according to filters
         rejected = False
         totalValidations = 5  # Updated: Total number of validation steps (restored RANGE validation)
         currentValidation = 1
@@ -472,9 +560,9 @@ def analyzePairs():
         if opp["score"] < scoreThreshold:
             messages(f"  ⚠️  {opp['pair']} rejected by SCORE ({currentValidation}/{totalValidations}): {opp['score']:.4f} < threshold {scoreThreshold:.4f}", console=0, log=1, telegram=0, pair=opp['pair'])
             rejected = True
-        elif posicionesYaAbiertas + nuevasAbiertas >= configData["maxOpenPositions"]:
+        elif posicionesYaAbiertas >= configData["maxOpenPositions"]:
             currentValidation = 2
-            totalOpen = posicionesYaAbiertas + nuevasAbiertas
+            totalOpen = posicionesYaAbiertas
             messages(f"  ⚠️  {opp['pair']} rejected by OPENED POSITIONS ({currentValidation}/{totalValidations}): {totalOpen}/{configData['maxOpenPositions']}", console=0, log=1, telegram=0, pair=opp['pair'])
             rejected = True
         else:
@@ -558,46 +646,28 @@ def analyzePairs():
         record = None
         accepted = 0
         if not rejected:
-            # 5e) Open position with investmentPct
+            # 5e) Instead of opening position immediately, add to approved opportunities list
             # Preparar para quitar ReduceOnly en modo Hedge (debe hacerse en orderManager/connector)
             side = opp.get("type", "long")  # Get side from opportunity type (long/short)
-            record = orderManager.openPosition(opp["pair"], slope=opp.get("slope"), intercept=opp.get("intercept"), investmentPct=investmentPct, side=side)
-            if record:
-                nuevasAbiertas += 1
-                accepted = 1
-                item = {
-                    **opp,
-                    "tpPrice": record["tpPrice"],
-                    "slPrice": record["slPrice"],
-                    "ma99": opp.get("ma99"),
-                    "momentum": opp.get("momentum"),
-                    "distance": opp.get("distancePct"),
-                    "touches": opp.get("touchesCount"),
-                    "volume": opp.get("volumeRatio"),
-                    "score": opp.get("score")
-                }
-                try:
-                    # Solo generar plot si el CSV tiene datos
-                    if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
-                        # Generar el plot y usar el nombre normalizado
-                        plotPath = os.path.join(gvars.plotsFolder, plotFileName)
-                        # Guardar el plot usando el nombre normalizado
-                        plotting.savePlot({**item, 'plotPath': plotPath})
-                        caption = (
-                            f"{symbolNorm}\n"
-                            f"Investment: {usdcInvestment:.1f} USDC (x{configData['leverage']})\n"
-                            f"Entry Price: {record['openPrice']}\n"
-                            f"TP: {record['tpPrice']}\n"
-                            f"SL: {record['slPrice']}"
-                        )
-                        messages([plotPath], console=0, log=1, telegram=2, caption=caption)
-                except Exception as e:
-                    messages(f"Error generating plot for {symbolNorm}: {e}", console=1, log=1, telegram=0, pair=symbolNorm)
-            else:
-                messages(f"{opp['pair']} openPosition returned None", console=0, log=0, telegram=0, pair=opp['pair'])
-
-        # ——— 6) Generar plot para TODOS los pares de `ordered` ———
-        # Incluir bouncePct y maxBounceAllowed para plotting.savePlot
+            
+            # Store all necessary data for position opening
+            opportunityToExecute = {
+                'pair': opp["pair"],
+                'slope': opp.get("slope"),
+                'intercept': opp.get("intercept"),
+                'investmentPct': investmentPct,
+                'side': side,
+                'opp': opp,  # Keep full opportunity data for plotting and logging
+                'symbolNorm': symbolNorm,
+                'plotFileName': plotFileName,
+                'usdcInvestment': usdcInvestment
+            }
+            
+            approvedOpportunities.append(opportunityToExecute)
+            messages(f"  ✅  {opp['pair']} approved for execution (score: {opp['score']:.4f})", console=1, log=1, telegram=0, pair=opp['pair'])
+            
+            # Count as accepted for logging purposes
+            accepted = 1
         itemAll = {
             **opp,
             "tpPrice":            (record or {}).get("tpPrice"),
@@ -707,6 +777,15 @@ def analyzePairs():
         messages("Plot generation started in background thread", console=0, log=1, telegram=0)
     
     messages(gvars._line_, console=1, log=1, telegram=0)
+    
+    # ——— NEW: EXECUTION PHASE - Process approved opportunities sequentially ———
+    if approvedOpportunities:
+        messages(f"🚀 Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=1, log=1, telegram=1)
+        executionResults = executeOpportunitiesSequentially(approvedOpportunities, configData)
+        messages(f"✅ Execution phase completed: {executionResults['opened']} positions opened, {executionResults['failed']} failed", console=1, log=1, telegram=1)
+    else:
+        messages("ℹ️ No opportunities approved for execution", console=1, log=1, telegram=0)
+    
     # monitorActive.set()  # Disabled - position monitor removed
 
     # Log of pairs found in openedPositions.json (log only)
