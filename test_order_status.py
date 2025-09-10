@@ -34,7 +34,23 @@ def testFetchOrderStatus(orderId, symbol=None):
                 
             print(f"✅ ÉXITO - fetchOrderStatus respondió:")
             print(f"Tipo de respuesta: {type(result)}")
-            print(f"Contenido: {result}")
+            print(f"Contenido completo: {result}")
+            
+            # Si es un dict, mostrar campos importantes de forma estructurada
+            if isinstance(result, dict):
+                print(f"\n📋 CAMPOS IMPORTANTES:")
+                important_fields = ['id', 'clientOrderId', 'symbol', 'type', 'side', 'status', 
+                                   'amount', 'price', 'cost', 'filled', 'remaining', 'average',
+                                   'stopPrice', 'triggerPrice', 'takeProfitPrice', 'stopLossPrice',
+                                   'timestamp', 'datetime', 'lastTradeTimestamp']
+                
+                for field in important_fields:
+                    if field in result:
+                        print(f"  {field}: {result[field]}")
+                        
+                print(f"\n🔍 TODOS LOS CAMPOS DISPONIBLES:")
+                for key, value in result.items():
+                    print(f"  {key}: {value}")
             
         except Exception as api_error:
             print(f"❌ ERROR en fetchOrderStatus:")
@@ -50,7 +66,20 @@ def testFetchOrderStatus(orderId, symbol=None):
                     result2 = exchange.fetch_order(orderId)
                     
                 print(f"✅ fetch_order funcionó:")
-                print(f"Resultado: {result2}")
+                print(f"Tipo de respuesta: {type(result2)}")
+                print(f"Resultado completo: {result2}")
+                
+                # Si es un dict, mostrar campos importantes
+                if isinstance(result2, dict):
+                    print(f"\n📋 CAMPOS IMPORTANTES:")
+                    important_fields = ['id', 'clientOrderId', 'symbol', 'type', 'side', 'status', 
+                                       'amount', 'price', 'cost', 'filled', 'remaining', 'average',
+                                       'stopPrice', 'triggerPrice', 'takeProfitPrice', 'stopLossPrice',
+                                       'timestamp', 'datetime', 'lastTradeTimestamp']
+                    
+                    for field in important_fields:
+                        if field in result2:
+                            print(f"  {field}: {result2[field]}")
                 
             except Exception as api_error2:
                 print(f"❌ fetch_order también falló:")
@@ -62,15 +91,20 @@ def testFetchOrderStatus(orderId, symbol=None):
         traceback.print_exc()
 
 def main():
-    if len(sys.argv) < 2:
-        print("Uso: python test_order_status.py <ORDER_ID> [SYMBOL]")
+    # Filter out sandbox/test flags from arguments
+    realArgs = [arg for arg in sys.argv[1:] if arg not in ['-test', '--sandbox']]
+    
+    if len(realArgs) < 1:
+        print("Uso: python test_order_status.py [-test] <ORDER_ID> [SYMBOL]")
         print("Ejemplos:")
         print("  python test_order_status.py 1965876339668508672")
         print("  python test_order_status.py 1965876339668508672 WIF/USDT:USDT")
+        print("  python test_order_status.py -test 1965876339668508672")
+        print("  python test_order_status.py -test 1965876339668508672 WIF/USDT:USDT")
         sys.exit(1)
     
-    orderId = sys.argv[1]
-    symbol = sys.argv[2] if len(sys.argv) > 2 else None
+    orderId = realArgs[0]
+    symbol = realArgs[1] if len(realArgs) > 1 else None
     
     testFetchOrderStatus(orderId, symbol)
 

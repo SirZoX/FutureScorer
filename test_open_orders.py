@@ -90,18 +90,29 @@ def testFetchOpenOrders(symbol=None, since=None, limit=None):
 
 def main():
     print("=== TEST DE fetch_open_orders ===")
+    print("Uso: python test_open_orders.py [-test] [SYMBOL] [SINCE] [LIMIT]")
     print("Este método puede aceptar los siguientes parámetros:")
     print("  - symbol: Par específico (ej: WIF/USDT:USDT) o None para todas")
     print("  - since: Timestamp desde cuando buscar (opcional)")
     print("  - limit: Número máximo de órdenes (opcional)")
     print()
+    print("Ejemplos:")
+    print("  python test_open_orders.py -test")
+    print("  python test_open_orders.py -test none")
+    print("  python test_open_orders.py -test WIF/USDT:USDT")
+    print("  python test_open_orders.py -test none none 50")
+    print("  - limit: Número máximo de órdenes (opcional)")
+    print()
+    
+    # Filter out sandbox/test flags from arguments
+    realArgs = [arg for arg in sys.argv[1:] if arg not in ['-test', '--sandbox']]
     
     # Obtener parámetros del usuario
-    if len(sys.argv) > 1:
+    if len(realArgs) > 0:
         # Usar parámetros de línea de comandos
-        symbol = sys.argv[1] if sys.argv[1].lower() != 'none' else None
-        since = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].lower() != 'none' else None
-        limit = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].lower() != 'none' else None
+        symbol = realArgs[0] if realArgs[0].lower() != 'none' else None
+        since = int(realArgs[1]) if len(realArgs) > 1 and realArgs[1].lower() != 'none' else None
+        limit = int(realArgs[2]) if len(realArgs) > 2 and realArgs[2].lower() != 'none' else None
     else:
         # Modo interactivo
         print("Introduce los parámetros (presiona Enter para None):")

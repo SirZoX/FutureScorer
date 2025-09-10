@@ -81,8 +81,11 @@ def safeApiCall(func, *args, **kwargs):
 
 def checkOrderStatusPeriodically():
     """
-    NUEVA FUNCIÓN SIMPLE: Verifica estado de órdenes TP/SL por ID
-    Actualiza campo 'status' en JSON basado en el estado de las órdenes
+    Verifica estado de órdenes TP/SL usando fetchOrderStatus
+    Estados posibles: open, closed, canceled
+    - open: la orden sigue abierta, no se ha ejecutado nada
+    - closed: la orden se ha ejecutado, calcular PnL y flujo normal  
+    - canceled: la orden se canceló porque se ejecutó la otra orden
     """
     from connector import bingxConnector
     from logManager import messages
@@ -119,84 +122,49 @@ def checkOrderStatusPeriodically():
                 pos['status'] = 'open'
                 positionsUpdated = True
             
-            # Get order IDs (prioritize custom IDs, then regular IDs)
-            tpOrderId = pos.get('tpOrderId2') or pos.get('tpOrderId1')
-            slOrderId = pos.get('slOrderId2') or pos.get('slOrderId1')
+            # Get order IDs (use regular IDs only)
+            tpOrderId = pos.get('tpOrderId1')
+            slOrderId = pos.get('slOrderId1')
             
-            # NEW: Get custom IDs for more reliable tracking
-            tpCustomId = pos.get('tpCustomId')
-            slCustomId = pos.get('slCustomId')
-            
-            if not tpOrderId and not slOrderId and not tpCustomId and not slCustomId:
+            if not tpOrderId and not slOrderId:
                 continue
             
             # Check TP order status
             tpStatus = None
-            tpExecuted = False
-            if tpCustomId or tpOrderId:
+            if tpOrderId:
                 try:
-                    # Try custom ID first, fallback to regular ID
-                    orderIdToCheck = tpCustomId if tpCustomId else tpOrderId
-                    idType = "custom" if tpCustomId else "regular"
-                    
-                    tpOrder, error = safeApiCall(exchange.fetch_order, orderIdToCheck, symbol)
+                    tpStatus, error = safeApiCall(exchange.fetchOrderStatus, tpOrderId, symbol)
                     if error:
-                        # Check if error indicates order was executed (order not exist)
-                        if "order not exist" in str(error).lower() or "80016" in str(error):
-                            tpExecuted = True
-                            tpStatus = 'executed'
-                            messages(f"[ORDER-CHECK] {symbol} TP order {orderIdToCheck} ({idType} ID) was executed (order not exist)", console=0, log=1, telegram=0)
-                        else:
-                            messages(f"[ORDER-CHECK] Error fetching TP order {orderIdToCheck} ({idType} ID) for {symbol}: {error}", console=0, log=1, telegram=0)
+                        messages(f"[ORDER-CHECK] Error fetching TP order status {tpOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
-                        tpStatus = tpOrder.get('status')
-                        messages(f"[ORDER-CHECK] {symbol} TP order {orderIdToCheck} ({idType} ID) status: {tpStatus} (RAW: {tpOrder})", console=0, log=1, telegram=0)
-                        if tpStatus in ['filled', 'closed']:
-                            tpExecuted = True
+                        messages(f"[ORDER-CHECK] {symbol} TP order {tpOrderId} status: {tpStatus}", console=0, log=1, telegram=0)
                 except Exception as e:
-                    messages(f"[ORDER-CHECK] Exception checking TP order for {symbol}: {e}", console=0, log=1, telegram=0)
+                    messages(f"[ORDER-CHECK] Exception checking TP order status for {symbol}: {e}", console=0, log=1, telegram=0)
             
             # Check SL order status  
             slStatus = None
-            slExecuted = False
-            if slCustomId or slOrderId:
+            if slOrderId:
                 try:
-                    # Try custom ID first, fallback to regular ID
-                    orderIdToCheck = slCustomId if slCustomId else slOrderId
-                    idType = "custom" if slCustomId else "regular"
-                    
-                    slOrder, error = safeApiCall(exchange.fetch_order, orderIdToCheck, symbol)
+                    slStatus, error = safeApiCall(exchange.fetchOrderStatus, slOrderId, symbol)
                     if error:
-                        # Check if error indicates order was executed (order not exist)
-                        if "order not exist" in str(error).lower() or "80016" in str(error):
-                            slExecuted = True
-                            slStatus = 'executed'
-                            messages(f"[ORDER-CHECK] {symbol} SL order {orderIdToCheck} ({idType} ID) was executed (order not exist)", console=0, log=1, telegram=0)
-                        else:
-                            messages(f"[ORDER-CHECK] Error fetching SL order {orderIdToCheck} ({idType} ID) for {symbol}: {error}", console=0, log=1, telegram=0)
+                        messages(f"[ORDER-CHECK] Error fetching SL order status {slOrderId} for {symbol}: {error}", console=0, log=1, telegram=0)
                     else:
-                        slStatus = slOrder.get('status')
-                        messages(f"[ORDER-CHECK] {symbol} SL order {orderIdToCheck} ({idType} ID) status: {slStatus} (RAW: {slOrder})", console=0, log=1, telegram=0)
-                        if slStatus in ['filled', 'closed']:
-                            slExecuted = True
+                        messages(f"[ORDER-CHECK] {symbol} SL order {slOrderId} status: {slStatus}", console=0, log=1, telegram=0)
                 except Exception as e:
-                    messages(f"[ORDER-CHECK] Exception checking SL order for {symbol}: {e}", console=0, log=1, telegram=0)
+                    messages(f"[ORDER-CHECK] Exception checking SL order status for {symbol}: {e}", console=0, log=1, telegram=0)
             
-            # Update position status if any order was executed
-            if tpExecuted or slExecuted:
+            # Process order status results
+            if tpStatus == 'closed' or slStatus == 'closed':
+                # One of the orders was executed - mark position as closed
                 pos['status'] = 'closed'
-                # Determine which order was executed - priority to TP if both appear executed
-                if tpExecuted and slExecuted:
-                    # Both appear executed - use position comparison to determine which one actually closed it
-                    exchangePositions = exchange.fetch_positions()
-                    openSymbols = {p['symbol'] for p in exchangePositions if p.get('contracts', 0) > 0}
-                    if symbol not in openSymbols:
-                        pos['close_reason'] = 'TP'  # Default to TP when unsure
-                    else:
-                        continue  # Position still open, something wrong
-                elif tpExecuted:
+                
+                # Determine which order was executed
+                if tpStatus == 'closed' and slStatus == 'closed':
+                    # Both show as closed - this shouldn't happen, default to TP
                     pos['close_reason'] = 'TP'
-                elif slExecuted:
+                elif tpStatus == 'closed':
+                    pos['close_reason'] = 'TP'
+                elif slStatus == 'closed':
                     pos['close_reason'] = 'SL'
                     
                 pos['close_time'] = datetime.now().isoformat()
