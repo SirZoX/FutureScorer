@@ -6,6 +6,7 @@ import sys
 import threading
 import re
 from gvars import positionsFile
+import orderManager
 
 # Global variables for rate limiting
 lastApiCall = 0
@@ -248,6 +249,15 @@ def notifyClosedPositions():
                 try:
                     # Send notification via telegram
                     messages(notificationMsg, console=1, log=1, telegram=1)
+                    
+                    # Log the trade to trades.csv
+                    try:
+                        # Create orderManager instance to log the trade
+                        orderMgr = orderManager.OrderManager()
+                        orderMgr.logTradeFromPosition(symbol, pos, closeReason, pnlQuote)
+                        messages(f"[TRADE-LOG] Trade logged to trades.csv for {symbol}", console=0, log=1, telegram=0)
+                    except Exception as tradeLogError:
+                        messages(f"[TRADE-LOG] Error logging trade for {symbol}: {tradeLogError}", console=0, log=1, telegram=0)
                     
                     # Mark as notified
                     pos['notification_sent'] = True
