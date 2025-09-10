@@ -687,7 +687,7 @@ class OrderManager:
                 # Check if error is about maximum position value exceeded (code 101209)
                 if "101209" in errorStr and "maximum position value" in errorStr.lower():
                     retryCount += 1
-                    messages(f"[POSITION-LIMIT] Attempt {retryCount}: Position value exceeds maximum for {symbol} at leverage {leverage}", console=1, log=1, telegram=0, pair=symbol)
+                    messages(f"[POSITION-LIMIT] Attempt {retryCount}: Position value exceeds maximum for {symbol} at leverage {leverage}", console=0, log=1, telegram=0, pair=symbol)
                     
                     # Extract maximum allowed position value from error message if possible
                     # Error format: "The maximum position value for this leverage is 1000 USDT."
@@ -696,7 +696,7 @@ class OrderManager:
                     
                     if maxValueMatch and retryCount < maxRetries:
                         maxAllowedValue = float(maxValueMatch.group(1))
-                        messages(f"[POSITION-LIMIT] Maximum allowed position value: {maxAllowedValue} USDT", console=1, log=1, telegram=0, pair=symbol)
+                        messages(f"[POSITION-LIMIT] Maximum allowed position value: {maxAllowedValue} USDT", console=0, log=1, telegram=0, pair=symbol)
                         
                         # Adjust position value to 95% of maximum to ensure it fits
                         adjustedPositionValue = maxAllowedValue * 0.95
@@ -708,7 +708,7 @@ class OrderManager:
                         
                         # Ensure it's still above minimum quantity
                         if minQty and newAmtDec < minQty:
-                            messages(f"[POSITION-LIMIT] Adjusted amount {newAmtDec} below minimum {minQty}, usando mínimo", console=1, log=1, telegram=0, pair=symbol)
+                            messages(f"[POSITION-LIMIT] Adjusted amount {newAmtDec} below minimum {minQty}, usando mínimo", console=0, log=1, telegram=0, pair=symbol)
                             newAmtDec = minQty
                             adjustedPositionValue = float(newAmtDec) * float(price)
                             adjustedInvestment = adjustedPositionValue / leverage
@@ -717,7 +717,7 @@ class OrderManager:
                         finalPositionUSDT = adjustedPositionValue
                         investUSDC = adjustedInvestment
                         
-                        messages(f"[POSITION-LIMIT] Adjusted values: investment={investUSDC:.2f} USDT, position_value={finalPositionUSDT:.2f} USDT, amount={amount}", console=1, log=1, telegram=1, pair=symbol)
+                        messages(f"[POSITION-LIMIT] Adjusted values: investment={investUSDC:.2f} USDT, position_value={finalPositionUSDT:.2f} USDT, amount={amount}", console=0, log=1, telegram=0, pair=symbol)
                         
                         # Generate new client ID for retry
                         clientId = f"{clientPrefix}{symbol.replace('/','')}_{int(datetime.utcnow().timestamp())}"

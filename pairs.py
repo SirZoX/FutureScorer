@@ -111,12 +111,12 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
     if not approvedOpportunities:
         return results
     
-    messages(f"📋 Processing {len(approvedOpportunities)} approved opportunities sequentially...", console=1, log=1, telegram=0)
+    messages(f"Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=0, log=1, telegram=0)
     
     for i, opportunity in enumerate(approvedOpportunities, 1):
         try:
             pair = opportunity['pair']
-            messages(f"[{i}/{len(approvedOpportunities)}] Processing {pair}...", console=1, log=1, telegram=0, pair=pair)
+            messages(f"[{i}/{len(approvedOpportunities)}] Processing {pair}...", console=0, log=1, telegram=0, pair=pair)
             
             # Check if we've reached max positions
             orderManager.updatePositions()
@@ -124,7 +124,7 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             maxOpenPositions = configData.get('maxOpenPositions', 8)
             
             if currentOpenPositions >= maxOpenPositions:
-                messages(f"⚠️ Max positions reached ({currentOpenPositions}/{maxOpenPositions}). Stopping execution.", console=1, log=1, telegram=1)
+                messages(f"Max positions reached ({currentOpenPositions}/{maxOpenPositions}). Stopping execution.", console=0, log=1, telegram=0)
                 break
             
             # Execute position opening with automatic retry logic for position limits
@@ -138,7 +138,7 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             
             if record:
                 results['opened'] += 1
-                messages(f"✅ [{i}/{len(approvedOpportunities)}] {pair} position opened successfully", console=1, log=1, telegram=1, pair=pair)
+                messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opened successfully", console=0, log=1, telegram=0, pair=pair)
                 
                 # Generate plot and send notification
                 try:
@@ -161,7 +161,6 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
                     
                     # Generate plot if CSV has data
                     if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
-                        import os
                         plotPath = os.path.join(gvars.plotsFolder, plotFileName)
                         plotting.savePlot({**item, 'plotPath': plotPath})
                         caption = (
@@ -176,11 +175,11 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
                     messages(f"Error generating plot for {symbolNorm}: {e}", console=1, log=1, telegram=0, pair=symbolNorm)
             else:
                 results['failed'] += 1
-                messages(f"❌ [{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=1, log=1, telegram=0, pair=pair)
+                messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=0, log=1, telegram=0, pair=pair)
                 
         except Exception as e:
             results['failed'] += 1
-            messages(f"❌ [{i}/{len(approvedOpportunities)}] Error processing {opportunity['pair']}: {e}", console=1, log=1, telegram=0, pair=opportunity['pair'])
+            messages(f"[{i}/{len(approvedOpportunities)}] Error processing {opportunity['pair']}: {e}", console=0, log=1, telegram=0, pair=opportunity['pair'])
     
     return results
 
@@ -780,11 +779,11 @@ def analyzePairs():
     
     # ——— NEW: EXECUTION PHASE - Process approved opportunities sequentially ———
     if approvedOpportunities:
-        messages(f"🚀 Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=1, log=1, telegram=1)
+        messages(f"Starting execution phase: {len(approvedOpportunities)} opportunities to process", console=1, log=1, telegram=0)
         executionResults = executeOpportunitiesSequentially(approvedOpportunities, configData)
-        messages(f"✅ Execution phase completed: {executionResults['opened']} positions opened, {executionResults['failed']} failed", console=1, log=1, telegram=1)
+        messages(f"Execution phase completed: {executionResults['opened']} positions opened, {executionResults['failed']} failed", console=1, log=1, telegram=0)
     else:
-        messages("ℹ️ No opportunities approved for execution", console=1, log=1, telegram=0)
+        messages("No opportunities approved for execution", console=1, log=1, telegram=0)
     
     # monitorActive.set()  # Disabled - position monitor removed
 
