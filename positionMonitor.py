@@ -172,7 +172,7 @@ def checkOrderStatusPeriodically():
                     pos['notification_sent'] = False
                 positionsUpdated = True
                 
-                messages(f"[ORDER-CHECK] Position {symbol} marked as closed ({pos['close_reason']})", console=1, log=1, telegram=1)
+                messages(f"[ORDER-CHECK] Position {symbol} marked as closed ({pos['close_reason']})", console=1, log=1, telegram=0)
         
         except Exception as e:
             messages(f"[ORDER-CHECK] Error processing {symbol}: {e}", console=0, log=1, telegram=0)
@@ -207,17 +207,47 @@ def notifyClosedPositions():
             # Notify only closed positions that haven't been notified
             if pos.get('status') == 'closed' and not pos.get('notification_sent', False):
                 
-                # Calculate basic profit info for notification
+                # Calculate PnL for notification
                 openPrice = float(pos.get('openPrice', 0))
                 closeReason = pos.get('close_reason', 'UNKNOWN')
+                amount = float(pos.get('amount', 0))
+                side = pos.get('side', 'LONG')
+                investment = float(pos.get('investment_usdt', 0))
+                leverage = int(pos.get('leverage', 1))
                 
-                # Basic profit calculation (simplified)
-                profitQuote = 0.0  # Will be calculated by notification function
-                profitPct = 0.0    # Will be calculated by notification function
+                # Determine close price based on TP or SL
+                if closeReason == 'TP':
+                    closePrice = float(pos.get('tpPrice', openPrice))
+                elif closeReason == 'SL':
+                    closePrice = float(pos.get('slPrice', openPrice))
+                else:
+                    closePrice = openPrice  # Fallback
+                
+                # Calculate PnL based on side
+                if side == 'LONG':
+                    pnlQuote = amount * (closePrice - openPrice)
+                else:  # SHORT
+                    pnlQuote = amount * (openPrice - closePrice)
+                
+                # Calculate PnL percentage based on investment
+                pnlPct = (pnlQuote / investment) * 100 if investment > 0 else 0
+                
+                # Format symbol for display (remove :USDT suffix)
+                symbolDisplay = symbol.replace('/USDT:USDT', '').replace(':USDT', '')
+                
+                # Create notification message like before
+                if closeReason == 'TP':
+                    emoji = "💰💰"
+                elif closeReason == 'SL':
+                    emoji = "☠️☠️"
+                else:
+                    emoji = "🔔"
+                
+                notificationMsg = f"{emoji} {side} {symbolDisplay} - P/L: {pnlQuote:.2f} USDT ({pnlPct:.2f}%) - Investment: {investment:.1f} ({leverage}x)"
                 
                 try:
                     # Send notification via telegram
-                    messages(f"🔔 Position {symbol} closed - {closeReason}", console=1, log=1, telegram=1)
+                    messages(notificationMsg, console=1, log=1, telegram=1)
                     
                     # Mark as notified
                     pos['notification_sent'] = True
