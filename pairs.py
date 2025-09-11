@@ -630,7 +630,7 @@ def analyzePairs():
             }
             
             approvedOpportunities.append(opportunityToExecute)
-            messages(f"  ✅  {opp['pair']} approved for execution (score: {opp['score']:.4f})", console=1, log=1, telegram=0, pair=opp['pair'])
+            messages(f"  ✅  {opp['pair']} approved for execution (score: {opp['score']:.4f})", console=0, log=1, telegram=0, pair=opp['pair'])
             
             # Count as accepted for logging purposes
             accepted = 1
