@@ -26,7 +26,7 @@ class IntelligentParameterOptimizer:
         self.maxChangePerOptimization = 0.1  # Maximum 10% parameter change per iteration
         
         # Initialize paths
-        self.learningDbPath = os.path.join(gvars.dataPath, "learningDatabase.json")
+        self.learningDbPath = gvars.learningDbFile
         
         # Load database after setting configuration
         self.learningDb = self.loadLearningDatabase()
