@@ -48,7 +48,18 @@ def deleteOldFiles(json, csv, plots):
         fileList = glob.glob(os.path.join(folder, '**', '*'), recursive=True)
         for filePath in fileList:
             if os.path.isfile(filePath):
-                os.remove(filePath)
+                try:
+                    os.remove(filePath)
+                except PermissionError:
+                    # File is in use by another process, skip it
+                    from logManager import messages
+                    messages(f"[FILE-MANAGER] Skipping file in use: {os.path.basename(filePath)}", console=0, log=1, telegram=0)
+                    continue
+                except Exception as e:
+                    # Other file errors, log but continue
+                    from logManager import messages
+                    messages(f"[FILE-MANAGER] Error deleting {os.path.basename(filePath)}: {e}", console=0, log=1, telegram=0)
+                    continue
 
 
 
