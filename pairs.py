@@ -2,6 +2,7 @@ import threading
 import os
 import json
 import time
+import uuid
 import ccxt
 from connector import bingxConnector
 from configManager import configManager
@@ -140,12 +141,64 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             else:
                 results['failed'] += 1
                 messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=0, log=1, telegram=0, pair=pair)
+                # Update selectionLog to mark as execution failed
+                updateSelectionLogForExecutionFailure(opportunity.get('opportunityId'), pair)
                 
         except Exception as e:
             results['failed'] += 1
             messages(f"[{i}/{len(approvedOpportunities)}] Error processing {opportunity['pair']}: {e}", console=0, log=1, telegram=0, pair=opportunity['pair'])
+            # Update selectionLog to mark as execution failed
+            updateSelectionLogForExecutionFailure(opportunity.get('opportunityId'), opportunity['pair'])
     
     return results
+
+
+def updateSelectionLogForExecutionFailure(opportunityId, pair):
+    """
+    Update selectionLog.csv to mark an opportunity as execution failed (accepted=0)
+    """
+    if not opportunityId:
+        return
+        
+    try:
+        import csv
+        import gvars
+        
+        # Read current selectionLog
+        rows = []
+        with open(gvars.selectionLogFile, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f, delimiter=';')
+            header = next(reader)
+            rows = [header]
+            
+            # Find accepted column index
+            acceptedIdx = header.index('accepted') if 'accepted' in header else -1
+            if acceptedIdx == -1:
+                return
+                
+            # Update the row with matching timestamp+pair or opportunityId
+            for row in reader:
+                if len(row) > 3 and row[3] == pair:
+                    # Check if this is recent (last few entries) by looking at timestamp
+                    try:
+                        rowTimestamp = int(row[2]) if len(row) > 2 else 0
+                        currentTimestamp = int(time.time())
+                        # If within last 5 minutes, assume it's our opportunity
+                        if abs(currentTimestamp - rowTimestamp) < 300:
+                            row[acceptedIdx] = '0'  # Mark as execution failed
+                            messages(f"[SELECTION-LOG] Updated {pair} execution status to failed", console=0, log=1, telegram=0)
+                            break
+                    except:
+                        pass
+                rows.append(row)
+        
+        # Write back updated selectionLog
+        with open(gvars.selectionLogFile, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerows(rows)
+            
+    except Exception as e:
+        messages(f"[ERROR] Failed to update selectionLog for execution failure {pair}: {e}", console=0, log=1, telegram=0)
 
 
 def analyzePairs():
@@ -617,6 +670,9 @@ def analyzePairs():
             side = opp.get("type", "long")  # Get side from opportunity type (long/short)
             
             # Store all necessary data for position opening
+            # Generate unique opportunity ID for tracking
+            opportunityId = str(uuid.uuid4())[:8]  # Short UUID for tracking
+            
             opportunityToExecute = {
                 'pair': opp["pair"],
                 'slope': opp.get("slope"),
@@ -626,7 +682,8 @@ def analyzePairs():
                 'opp': opp,  # Keep full opportunity data for plotting and logging
                 'symbolNorm': symbolNorm,
                 'plotFileName': plotFileName,
-                'usdcInvestment': usdcInvestment
+                'usdcInvestment': usdcInvestment,
+                'opportunityId': opportunityId  # Add unique ID for tracking
             }
             
             approvedOpportunities.append(opportunityToExecute)
@@ -664,7 +721,9 @@ def analyzePairs():
         # ——— 7) Loguear en selectionLog.csv ———
         tpId = (record or {}).get("tpOrderId2") or (record or {}).get("tpOrderId1", "")
         slId = (record or {}).get("slOrderId2") or (record or {}).get("slOrderId1", "")
-        oppId = f"{tpId}-{slId}" if (tpId or slId) else "-"
+        # Use unique opportunity ID for tracking
+        uniqueId = str(uuid.uuid4())[:8]
+        oppId = f"{tpId}-{slId}" if (tpId or slId) else uniqueId
         tsIso = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S")
         tsUnix = int(datetime.utcnow().timestamp())
         w = scoringWeights
