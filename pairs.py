@@ -342,8 +342,8 @@ def analyzePairs():
         messages(f"Error reading openedPositions.json: {e}", console=0, log=1, telegram=0)
 
     if currentPositionsCount >= maxOpenPositions:
-        messages(f"⚠️  Maximum positions reached ({currentPositionsCount}/{maxOpenPositions}). Skipping analysis to save resources.", console=1, log=1, telegram=0)
-        messages("Analysis cancelled - all position slots are occupied", console=1, log=1, telegram=0)
+        messages(f"⚠️  Maximum positions reached ({currentPositionsCount}/{maxOpenPositions}). Skipping analysis to save resources.", console=0, log=1, telegram=0)
+        messages("Analysis cancelled - all position slots are occupied", console=0, log=1, telegram=0)
         # monitorActive.set()  # Disabled - position monitor removed
         return []  # Return empty list to indicate no analysis was performed
 
@@ -1031,7 +1031,7 @@ def updatePairs():
     numSelect = max(1, int(len(sortedPairs) * topCoinsPctAnalyzed / 100))
     selected = sortedPairs[:numSelect]
 
-    messages(f"  >> Total USDT perpetual futures pairs with volume >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=1, log=1, telegram=0, pair="")
+    messages(f"  >> Total USDT perpetual futures pairs with volume >= {minVolume}: {len(sortedPairs)}. Top {topCoinsPctAnalyzed}% seleccionados: {numSelect}", console=0, log=1, telegram=0, pair="")
 
     # ...existing code...
     # Justo antes de iniciar el análisis, imprimir los pares seleccionados ordenados por volumen
@@ -1039,7 +1039,7 @@ def updatePairs():
     # Mensaje informativo antes de analizar
     numHilos = gvars.threadPoolMaxWorkers
     sleepSeg = gvars.pairAnalysisSleepTime
-    messages(f"  >> Using {numHilos} threads with {sleepSeg}s sleeping between each one", console=1, log=1, telegram=0, pair="")
+    messages(f"  >> Using {numHilos} threads with {sleepSeg}s sleeping between each one", console=0, log=1, telegram=0, pair="")
 
     # Guardar selección
     fileManager.saveJson(selected, gvars.topSelectionFile.split('/')[-1])

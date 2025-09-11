@@ -350,7 +350,7 @@ if __name__ == "__main__":
     # Execute all position management tasks sequentially every 4 minutes
     schedule.every(4).minutes.do(managePositionsSequentially)
     
-    messages("Sequential position management system scheduled (every 4 minutes)", console=1, log=1, telegram=0)
+    messages("Sequential position management system scheduled (every 4 minutes)", console=0, log=1, telegram=0)
     
     # Set orderManager reference for telegram commands
     import helpers
