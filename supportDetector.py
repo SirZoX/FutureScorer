@@ -286,10 +286,10 @@ def _validateBounce(line, lows, highs, closes, opens, n, tolerancePct):
                 hasTouchToResistance = True
                 break
         
-        hasRedBounce = (closes[-1] < opens[-1] and closes[-2] < opens[-2])
+        hasRedBounce = (closes[-1] < opens[-1] or closes[-2] < opens[-2])  # At least 1 red candle (same logic as LONG)
         bounce = hasTouchToResistance and hasRedBounce
         
-        if line['ratioBelow'] > 1 - 0.02 and bounce:  # closeViolationPct = 0.02
+        if line['ratioBelow'] > 1 - 0.05 and bounce:  # Same tolerance as LONG (0.05)
             line['bounce'] = bounce
             line['hasTouchToResistance'] = hasTouchToResistance
             line['hasRedBounce'] = hasRedBounce

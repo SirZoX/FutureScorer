@@ -460,8 +460,8 @@ def analyzePairs():
                 "csvPath": fileManager.saveCsv(ohlcv, pair, timeframe, requestedCandles) if ohlcv and len(ohlcv) > 0 else "",
                 "minPctBounceAllowed": minPctBounceAllowed,
                 "maxPctBounceAllowed": maxPctBounceAllowed,
-                "bounceLow": lineExp[last] * (1 + minPctBounceAllowed),
-                "bounceHigh": lineExp[last] * (1 + maxPctBounceAllowed),
+                "bounceLow": lineExp[last] * (1 - maxPctBounceAllowed) if opp['type'] == 'short' else lineExp[last] * (1 + minPctBounceAllowed),
+                "bounceHigh": lineExp[last] * (1 - minPctBounceAllowed) if opp['type'] == 'short' else lineExp[last] * (1 + maxPctBounceAllowed),
                 "ma25Prev": ma25Prev,
                 "ma99Prev": ma99Prev,
                 # Add candle data to avoid CSV re-reading
@@ -469,6 +469,7 @@ def analyzePairs():
                     "close_n1": df["close"].iat[last],
                     "open_n1": df["open"].iat[last], 
                     "low_n1": df["low"].iat[last],
+                    "high_n1": df["high"].iat[last],  # Add high_n1 for SHORT validation
                     "close_n2": df["close"].iat[prev],
                     "open_n2": df["open"].iat[prev],
                     "candleCount": len(df)
@@ -652,6 +653,7 @@ def analyzePairs():
                     close_n1 = df["close"].iloc[-1]
                     open_n1 = df["open"].iloc[-1]
                     low_n1 = df["low"].iloc[-1]
+                    high_n1 = df["high"].iloc[-1]  # Add high_n1 for SHORT validation
                     close_n2 = df["close"].iloc[-2]
                     open_n2 = df["open"].iloc[-2]
                     candleCount = len(df)
@@ -660,6 +662,7 @@ def analyzePairs():
                     close_n1 = candleData["close_n1"]
                     open_n1 = candleData["open_n1"]
                     low_n1 = candleData["low_n1"]
+                    high_n1 = candleData["high_n1"]  # Add high_n1 for SHORT validation
                     close_n2 = candleData["close_n2"]
                     open_n2 = candleData["open_n2"]
                     candleCount = candleData["candleCount"]
@@ -680,18 +683,33 @@ def analyzePairs():
                     color_n2 = "green" if isN2Green else "red"
                     messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}): N-1={color_n1}, N-2={color_n2} (must be same color)", console=0, log=1, telegram=0, pair=opp['pair'])
                     rejected = True
-                # N-1 must touch or pierce the support line
+                # N-1 must touch or pierce the support/resistance line based on position type
                 if not rejected:
                     currentValidation = 4
-                    if low_n1 < soporte_n1:
-                        # If it pierces, allow tolerance
-                        if abs(low_n1 - soporte_n1) > abs(soporte_n1) * tolerancePct:
-                            messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 pierces but out of tolerance", console=0, log=1, telegram=0, pair=opp['pair'])
+                    
+                    if opp['type'] == 'long':
+                        # LONG: Check if low touches or pierces support line
+                        if low_n1 < soporte_n1:
+                            # If it pierces, allow tolerance
+                            if abs(low_n1 - soporte_n1) > abs(soporte_n1) * tolerancePct:
+                                messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 pierces but out of tolerance", console=0, log=1, telegram=0, pair=opp['pair'])
+                                rejected = True
+                        elif low_n1 > soporte_n1:
+                            # If it does not touch, reject
+                            messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 does not touch the support line", console=0, log=1, telegram=0, pair=opp['pair'])
                             rejected = True
-                    elif low_n1 > soporte_n1:
-                        # If it does not touch, do not allow tolerance
-                        messages(f"  ⚠️  {opp['pair']} rejected by SUPPORT TOUCH ({currentValidation}/{totalValidations}): N-1 does not touch the support line", console=0, log=1, telegram=0, pair=opp['pair'])
-                        rejected = True
+                    
+                    elif opp['type'] == 'short':
+                        # SHORT: Check if high touches or pierces resistance line
+                        if high_n1 > soporte_n1:
+                            # If it pierces, allow tolerance
+                            if abs(high_n1 - soporte_n1) > abs(soporte_n1) * tolerancePct:
+                                messages(f"  ⚠️  {opp['pair']} rejected by RESISTANCE TOUCH ({currentValidation}/{totalValidations}): N-1 pierces but out of tolerance", console=0, log=1, telegram=0, pair=opp['pair'])
+                                rejected = True
+                        elif high_n1 < soporte_n1:
+                            # If it does not touch, reject
+                            messages(f"  ⚠️  {opp['pair']} rejected by RESISTANCE TOUCH ({currentValidation}/{totalValidations}): N-1 does not touch the resistance line", console=0, log=1, telegram=0, pair=opp['pair'])
+                            rejected = True
             except Exception as e:
                 currentValidation = 3  # Error in candle sequence check
                 messages(f"  ⚠️  {opp['pair']} rejected by CANDLE SEQUENCE ({currentValidation}/{totalValidations}) check error: {e}", console=0, log=1, telegram=0, pair=opp['pair'])
