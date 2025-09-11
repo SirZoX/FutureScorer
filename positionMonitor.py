@@ -93,6 +93,62 @@ def logTradeDirectly(symbol, position, closeReason, netProfitUsdt):
         from logManager import messages
         messages(f"[TRADE-LOG] Error logging trade directly for {symbol}: {e}", console=0, log=1, telegram=0)
 
+def updateSelectionLogWithClose(symbol, position, closeReason, netProfitUsdt, netProfitPct):
+    """
+    Update selectionLog.csv with closing data for completed positions
+    """
+    try:
+        from datetime import datetime
+        import tempfile
+        import shutil
+        from gvars import selectionLogFile
+        
+        # Get order IDs to match with the log entry
+        tpId = position.get("tpOrderId1", "") or position.get("tpOrderId2", "")
+        slId = position.get("slOrderId1", "") or position.get("slOrderId2", "")
+        orderId = f"{tpId}-{slId}" if (tpId or slId) else ""
+        
+        if not orderId or orderId == "-":
+            return  # Cannot update without order ID
+        
+        # Calculate closing data
+        openTimestamp = position.get('open_ts_unix', 0)
+        closeTimestamp = int(datetime.now().timestamp())
+        timeToCloseS = closeTimestamp - openTimestamp if openTimestamp else 0
+        closeTimeIso = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        
+        # Read and update the file
+        if not os.path.exists(selectionLogFile):
+            return
+            
+        updated = False
+        with open(selectionLogFile, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Update the matching line
+        for i, line in enumerate(lines):
+            if line.startswith(orderId + ";"):
+                parts = line.strip().split(';')
+                if len(parts) >= 37:  # Ensure we have enough columns (updated count)
+                    # Update closing fields (last 5 columns)
+                    parts[-5] = f"{netProfitUsdt:.4f}"  # profitQuote
+                    parts[-4] = f"{netProfitPct:.2f}"   # profitPct
+                    parts[-3] = closeTimeIso            # close_ts_iso
+                    parts[-2] = str(closeTimestamp)     # close_ts_unix
+                    parts[-1] = str(timeToCloseS)       # time_to_close_s
+                    lines[i] = ";".join(parts) + "\n"
+                    updated = True
+                    break
+        
+        # Write back the updated file
+        if updated:
+            with open(selectionLogFile, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+                
+    except Exception as e:
+        from logManager import messages
+        messages(f"[SELECTION-LOG] Error updating selection log for {symbol}: {e}", console=0, log=1, telegram=0)
+
 def detectSandboxMode():
     """
     Detect if we're running in sandbox mode by checking command line args
@@ -337,6 +393,13 @@ def notifyClosedPositions():
                         messages(f"[TRADE-LOG] Trade logged to trades.csv for {symbol}", console=0, log=1, telegram=0)
                     except Exception as tradeLogError:
                         messages(f"[TRADE-LOG] Error logging trade for {symbol}: {tradeLogError}", console=0, log=1, telegram=0)
+                    
+                    # Update selectionLog.csv with closing data
+                    try:
+                        updateSelectionLogWithClose(symbol, pos, closeReason, pnlQuote, pnlPct)
+                        messages(f"[SELECTION-LOG] Updated selectionLog.csv for {symbol}", console=0, log=1, telegram=0)
+                    except Exception as selectionLogError:
+                        messages(f"[SELECTION-LOG] Error updating selectionLog for {symbol}: {selectionLogError}", console=0, log=1, telegram=0)
                     
                     # Mark as notified
                     pos['notification_sent'] = True

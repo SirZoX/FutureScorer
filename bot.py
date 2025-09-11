@@ -108,6 +108,7 @@ if not os.path.isfile(gvars.selectionLogFile):
             "timestamp_iso;"
             "timestamp_unix;"
             "pair;"
+            "type;"
             "distancePct;"
             "volumeRatio;"
             "momentum;"
@@ -130,7 +131,16 @@ if not os.path.isfile(gvars.selectionLogFile):
             "weight_distance;"
             "weight_volume;"
             "weight_momentum;"
-            "weight_touches\n"
+            "weight_touches;"
+            "tpPercent;"
+            "slPercent;"
+            "leverage;"
+            "investment_usdt;"
+            "profitQuote;"
+            "profitPct;"
+            "close_ts_iso;"
+            "close_ts_unix;"
+            "time_to_close_s\n"
         )
 
 

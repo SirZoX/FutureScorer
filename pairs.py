@@ -664,7 +664,7 @@ def analyzePairs():
         # ——— 7) Loguear en selectionLog.csv ———
         tpId = (record or {}).get("tpOrderId2") or (record or {}).get("tpOrderId1", "")
         slId = (record or {}).get("slOrderId2") or (record or {}).get("slOrderId1", "")
-        oppId = f"{tpId}-{slId}"
+        oppId = f"{tpId}-{slId}" if (tpId or slId) else "-"
         tsIso = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%Y-%m-%d %H-%M-%S")
         tsUnix = int(datetime.utcnow().timestamp())
         w = scoringWeights
@@ -700,7 +700,16 @@ def analyzePairs():
             helpers.fmt(w["distance"], 3),
             helpers.fmt(w["volume"], 3),
             helpers.fmt(w["momentum"], 3),
-            helpers.fmt(w["touches"], 3)
+            helpers.fmt(w["touches"], 3),
+            helpers.fmt((record or {}).get("tpPercent", 0), 1),
+            helpers.fmt((record or {}).get("slPercent", 0), 1),
+            str((record or {}).get("leverage", 0)),
+            helpers.fmt((record or {}).get("investment_usdt", 0), 4),
+            "",  # profitQuote - to be filled when position closes
+            "",  # profitPct - to be filled when position closes
+            "",  # close_ts_iso - to be filled when position closes
+            "",  # close_ts_unix - to be filled when position closes
+            ""   # time_to_close_s - to be filled when position closes
         ]) + "\n"
 
         with open(gvars.selectionLogFile, "a", encoding="utf-8") as f:
