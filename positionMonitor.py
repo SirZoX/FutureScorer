@@ -423,6 +423,13 @@ def notifyClosedPositions():
                     except Exception as selectionLogError:
                         messages(f"[SELECTION-LOG] Error updating selectionLog for {symbol}: {selectionLogError}", console=0, log=1, telegram=0)
                     
+                    # Save to closed positions history
+                    try:
+                        saveClosedPosition(symbol, pos, closeReason, pnlQuote, pnlPct)
+                        messages(f"[CLOSED-POSITIONS] Saved to closed positions history: {symbol}", console=0, log=1, telegram=0)
+                    except Exception as closedPosError:
+                        messages(f"[CLOSED-POSITIONS] Error saving closed position: {closedPosError}", console=0, log=1, telegram=0)
+                    
                     # Mark as notified
                     pos['notification_sent'] = True
                     positionsUpdated = True
@@ -505,3 +512,44 @@ def cleanNotifiedPositions():
             messages(f"[CLEANUP] Error saving cleaned positions: {e}", console=1, log=1, telegram=0)
     else:
         messages("[CLEANUP] No positions to clean", console=0, log=1, telegram=0)
+
+
+def saveClosedPosition(symbol, position, closeReason, pnlQuote, pnlPct):
+    """
+    Save closed position to historical record for learning system
+    """
+    import gvars
+    from datetime import datetime
+    
+    try:
+        # Create closed position record
+        closedPosition = {
+            **position,  # Copy all original position data
+            "closeReason": closeReason,
+            "pnlQuote": pnlQuote,
+            "pnlPct": pnlPct,
+            "closedAt": datetime.now().strftime('%Y-%m-%d %H-%M-%S'),
+            "closedTimestamp": int(time.time())
+        }
+        
+        # Load existing closed positions or create new structure
+        closedPositions = {}
+        if os.path.exists(gvars.closedPositionsFile):
+            with open(gvars.closedPositionsFile, 'r', encoding='utf-8') as f:
+                closedPositions = json.load(f)
+        
+        # Add new closed position with unique key
+        uniqueKey = f"{symbol}_{closedPosition['closedTimestamp']}"
+        closedPositions[uniqueKey] = closedPosition
+        
+        # Save back to file
+        os.makedirs(os.path.dirname(gvars.closedPositionsFile), exist_ok=True)
+        with open(gvars.closedPositionsFile, 'w', encoding='utf-8') as f:
+            json.dump(closedPositions, f, indent=2)
+        
+        return True
+        
+    except Exception as e:
+        from logManager import messages
+        messages(f"[CLOSED-POSITIONS] Error saving closed position {symbol}: {e}", console=0, log=1, telegram=0)
+        return False

@@ -22,6 +22,7 @@ tradesLogFile = f"{logsFolder}/trades.csv"          # trades log
 learningDbFile = f"{jsonFolder}/learningDatabase.json"  # intelligent optimizer learning database
 marketsFile = f"{jsonFolder}/markets.json"
 positionsFile = f"{jsonFolder}/openedPositions.json"
+closedPositionsFile = f"{jsonFolder}/closedPositions.json"  # historical closed positions
 dailyBalanceFile = f"{jsonFolder}/dailyBalance.json"
 topSelectionFile = f"{jsonFolder}/topSelection.json"  # top selection pairs
 

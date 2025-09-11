@@ -73,6 +73,23 @@ def showLearningDatabase():
         print(f"Error showing learning database: {e}")
 
 
+def loadHistoricalDataCommand():
+    """Load historical closed positions into learning database"""
+    try:
+        count = optimizer.loadHistoricalClosedPositions()
+        if count > 0:
+            print(f"✅ Loaded {count} historical positions into learning database")
+        else:
+            print("ℹ️  No new historical positions to load")
+    except Exception as e:
+        print(f"❌ Error loading historical data: {e}")
+
+
 if __name__ == "__main__":
-    printOptimizerStatus()
-    showLearningDatabase()
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--load-history":
+        loadHistoricalDataCommand()
+    else:
+        printOptimizerStatus()
+        showLearningDatabase()

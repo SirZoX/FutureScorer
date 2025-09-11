@@ -121,11 +121,37 @@ class IntelligentParameterOptimizer:
     
     def extractEntryParameters(self, positionData: Dict) -> Dict:
         """Extract the parameters that were used for entry decision"""
-        # Get current config as baseline
-        currentConfig = configManager.config
+        # Try to get from selectionLog first using opportunityId
+        try:
+            opportunityId = positionData.get("opportunityId", "")
+            if opportunityId:
+                # Search selectionLog for this ID
+                selectionLogPath = os.path.join(gvars.logsFolder, "selectionLog.csv")
+                if os.path.exists(selectionLogPath):
+                    import csv
+                    with open(selectionLogPath, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f, delimiter=';')
+                        for row in reader:
+                            if row.get('id') == opportunityId:
+                                # Found the original entry parameters
+                                return {
+                                    "score": float(row.get('score', 0)),
+                                    "scoreThreshold": float(row.get('scoreThreshold', 0.4)),
+                                    "tolerancePct": float(row.get('tolerancePct', 0.0075)),
+                                    "minTouches": int(row.get('minTouches', 3)),
+                                    "distancePct": float(row.get('distancePct', 0)),
+                                    "volumeRatio": float(row.get('volumeRatio', 0)),
+                                    "momentum": float(row.get('momentum', 0)),
+                                    "touchesCount": int(row.get('touchesCount', 0)),
+                                    "leverage": int(row.get('leverage', 35)),
+                                    "tp1": float(row.get('tp1', 0.30)),
+                                    "sl1": float(row.get('sl1', 0.40))
+                                }
+        except Exception as e:
+            messages(f"[OPTIMIZER] Error reading selectionLog for {opportunityId}: {e}", console=0, log=1, telegram=0)
         
-        # Try to get from selectionLog if available
-        # For now, use current config values
+        # Fallback: use current config values
+        currentConfig = configManager.config
         return {
             "scoreThreshold": currentConfig.get("scoreThreshold", 0.4),
             "tolerancePct": currentConfig.get("tolerancePct", 0.0075),
@@ -308,6 +334,55 @@ class IntelligentParameterOptimizer:
         profitable = len([p for p in positions if p["outcome"].get("result") == "profit"])
         return profitable / len(positions)
     
+    def loadHistoricalClosedPositions(self):
+        """
+        Load historical closed positions and add them to learning database
+        This is useful for bootstrapping the learning system with existing data
+        """
+        try:
+            closedPositionsPath = os.path.join(gvars.jsonFolder, "closedPositions.json")
+            if not os.path.exists(closedPositionsPath):
+                messages("[OPTIMIZER] No historical closed positions file found", console=0, log=1, telegram=0)
+                return 0
+            
+            with open(closedPositionsPath, 'r', encoding='utf-8') as f:
+                closedPositions = json.load(f)
+            
+            if not closedPositions:
+                return 0
+            
+            addedCount = 0
+            existingIds = {p.get('id', '') for p in self.learningDb.get('positionOutcomes', [])}
+            
+            for key, pos in closedPositions.items():
+                # Check if we already have this position in learning database
+                posId = pos.get('opportunityId', key)
+                if posId in existingIds:
+                    continue
+                
+                # Convert to learning format
+                outcome = {
+                    "result": "profit" if pos.get("pnlQuote", 0) > 0 else "loss" if pos.get("pnlQuote", 0) < 0 else "breakeven",
+                    "profitPct": pos.get("pnlPct", 0) / 100.0,  # Convert to decimal
+                    "profitUsdt": pos.get("pnlQuote", 0),
+                    "closeReason": pos.get("closeReason", "unknown"),
+                    "timeToClose": None,  # TODO: Calculate if we have timestamps
+                    "actualBounce": None,
+                    "bounceAccuracy": None
+                }
+                
+                # Add to learning database
+                self.analyzeClosedPosition(pos, outcome)
+                addedCount += 1
+            
+            messages(f"[OPTIMIZER] Loaded {addedCount} historical positions into learning database", 
+                    console=1, log=1, telegram=0)
+            return addedCount
+            
+        except Exception as e:
+            messages(f"[OPTIMIZER] Error loading historical positions: {e}", console=0, log=1, telegram=0)
+            return 0
+
     def getOptimizationStatus(self) -> Dict:
         """Get current optimization status"""
         total = self.learningDb["totalClosedPositions"]
