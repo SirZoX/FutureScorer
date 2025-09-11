@@ -6,6 +6,7 @@ version = "0.1.0"  # Bot version
 
 # Base folders
 baseFolder = "_files"                       # main storage folder
+dataPath = baseFolder                       # alias for compatibility with optimizer
 configFolder = f"{baseFolder}/config"       # config files folder
 jsonFolder = f"{baseFolder}/json"           # JSON dumps
 csvFolder = f"{baseFolder}/csv"             # CSV dumps
@@ -18,6 +19,7 @@ configFile = f"{configFolder}/config.json"          # main bot config
 ignorePairsFile = f"{configFolder}/ignore_pairs.json"  # pairs to ignore
 selectionLogFile = f"{logsFolder}/selectionLog.csv"  # master selection log
 tradesLogFile = f"{logsFolder}/trades.csv"          # trades log
+learningDbFile = f"{jsonFolder}/learningDatabase.json"  # intelligent optimizer learning database
 marketsFile = f"{jsonFolder}/markets.json"
 positionsFile = f"{jsonFolder}/openedPositions.json"
 dailyBalanceFile = f"{jsonFolder}/dailyBalance.json"

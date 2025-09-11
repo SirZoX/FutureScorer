@@ -394,6 +394,28 @@ def notifyClosedPositions():
                     except Exception as tradeLogError:
                         messages(f"[TRADE-LOG] Error logging trade for {symbol}: {tradeLogError}", console=0, log=1, telegram=0)
                     
+                    # Add position to intelligent optimizer learning system
+                    try:
+                        from intelligentOptimizer import optimizer
+                        
+                        # Prepare outcome data
+                        outcome = {
+                            "result": "profit" if pnlQuote > 0 else "loss" if pnlQuote < 0 else "breakeven",
+                            "profitPct": pnlPct / 100.0,  # Convert to decimal
+                            "profitUsdt": pnlQuote,
+                            "closeReason": closeReason,
+                            "timeToClose": None,  # TODO: Calculate time to close in seconds
+                            "actualBounce": None,  # TODO: Analyze if actual bounce occurred
+                            "bounceAccuracy": None  # TODO: Calculate bounce accuracy
+                        }
+                        
+                        # Add to learning system
+                        optimizer.analyzeClosedPosition(pos, outcome)
+                        messages(f"[OPTIMIZER] Added position {symbol} to learning database", console=0, log=1, telegram=0)
+                        
+                    except Exception as optimizerError:
+                        messages(f"[OPTIMIZER] Error adding position to learning system: {optimizerError}", console=0, log=1, telegram=0)
+                    
                     # Update selectionLog.csv with closing data
                     try:
                         updateSelectionLogWithClose(symbol, pos, closeReason, pnlQuote, pnlPct)
