@@ -137,40 +137,6 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             if record:
                 results['opened'] += 1
                 messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opened successfully", console=0, log=1, telegram=0, pair=pair)
-                
-                # Generate plot and send notification
-                try:
-                    opp = opportunity['opp']
-                    symbolNorm = opportunity['symbolNorm']
-                    plotFileName = opportunity['plotFileName']
-                    usdcInvestment = opportunity['usdcInvestment']
-                    
-                    item = {
-                        **opp,
-                        "tpPrice": record["tpPrice"],
-                        "slPrice": record["slPrice"],
-                        "ma99": opp.get("ma99"),
-                        "momentum": opp.get("momentum"),
-                        "distance": opp.get("distancePct"),
-                        "touches": opp.get("touchesCount"),
-                        "volume": opp.get("volumeRatio"),
-                        "score": opp.get("score")
-                    }
-                    
-                    # Generate plot if CSV has data
-                    if item['csvPath'] and os.path.isfile(item['csvPath']) and os.path.getsize(item['csvPath']) > 0:
-                        plotPath = os.path.join(gvars.plotsFolder, plotFileName)
-                        plotting.savePlot({**item, 'plotPath': plotPath})
-                        caption = (
-                            f"{symbolNorm}\n"
-                            f"Investment: {usdcInvestment:.1f} USDC (x{configData['leverage']})\n"
-                            f"Entry Price: {record['openPrice']}\n"
-                            f"TP: {record['tpPrice']}\n"
-                            f"SL: {record['slPrice']}"
-                        )
-                        messages([plotPath], console=0, log=1, telegram=2, caption=caption)
-                except Exception as e:
-                    messages(f"Error generating plot for {symbolNorm}: {e}", console=1, log=1, telegram=0, pair=symbolNorm)
             else:
                 results['failed'] += 1
                 messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=0, log=1, telegram=0, pair=pair)
@@ -689,15 +655,8 @@ def analyzePairs():
                 # Do not add bouncePct or maxBounceAllowed, only the new fields
             })
         
-        # Only generate plots immediately for positions that were actually opened
-        # This saves significant time during analysis - other plots will be generated later
-        if record:  # Position was opened
-            try:
-                plotting.savePlot(itemAll)
-            except Exception as e:
-                messages(f"Error saving plot for opened position {opp['pair']}: {e}", console=1, log=1, telegram=0, pair=opp['pair'])
-        
         # Store data for post-analysis plot generation (for all opportunities)
+        # All plots will be generated asynchronously at the end to avoid slowing down execution
         if not hasattr(analyzePairs, '_plotData'):
             analyzePairs._plotData = []
         analyzePairs._plotData.append(itemAll)
