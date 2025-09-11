@@ -124,6 +124,7 @@ if not os.path.isfile(gvars.selectionLogFile):
             "bounceLow;"
             "bounceHigh;"
             "ma25Prev;"
+            "ma99Prev;"
             "filter1Passed;"
             "filter2Passed;"
             "weight_distance;"

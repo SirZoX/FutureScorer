@@ -341,10 +341,12 @@ def analyzePairs():
             last, prev, prev2 = len(df)-1, len(df)-2, len(df)-3
             lineExp = opp['lineExp']
             
-            # Skip MA calculation entirely since it's not used for filtering anymore
-            # This saves significant computation time for each pair
-            ma25Prev = None  # Removed expensive MA calculation
-            ma99Prev = None  # Removed expensive MA calculation
+            # Calculate MA25 and MA99 for logging and pattern analysis
+            # Re-enabled for data collection and pattern analysis
+            ma25Series = df["close"].rolling(window=25).mean()
+            ma99Series = df["close"].rolling(window=99).mean()
+            ma25Prev = ma25Series.iloc[prev] if len(ma25Series) > prev and not pd.isna(ma25Series.iloc[prev]) else None
+            ma99Prev = ma99Series.iloc[prev] if len(ma99Series) > prev and not pd.isna(ma99Series.iloc[prev]) else None
             
             # Calcular score y otros datos igual que antes
             avgVol   = df["volume"].mean() or 1
@@ -732,7 +734,8 @@ def analyzePairs():
             helpers.fmt((record or {}).get("slPrice", 0), 6),
             helpers.fmt(opp["bounceLow"], 6),
             helpers.fmt(opp["bounceHigh"], 6),
-            helpers.fmt(opp.get("ma25Prev") or 0, 6),  # Handle None values from optimized processing
+            helpers.fmt(opp.get("ma25Prev") or 0, 6),  # MA25 value for pattern analysis
+            helpers.fmt(opp.get("ma99Prev") or 0, 6),  # MA99 value for pattern analysis
             str(int(opp["filter1Passed"])),
             str(int(opp["filter2Passed"])),
             helpers.fmt(w["distance"], 3),
