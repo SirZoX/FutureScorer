@@ -20,13 +20,16 @@ class IntelligentParameterOptimizer:
     """
     
     def __init__(self):
-        self.learningDbPath = os.path.join(gvars.dataPath, "learningDatabase.json")
-        self.learningDb = self.loadLearningDatabase()
-        
         # Configuration
         self.minimumSampleSize = 50  # Minimum closed positions before optimization
         self.optimizationFrequency = 10  # Optimize every N positions after minimum
         self.maxChangePerOptimization = 0.1  # Maximum 10% parameter change per iteration
+        
+        # Initialize paths
+        self.learningDbPath = os.path.join(gvars.dataPath, "learningDatabase.json")
+        
+        # Load database after setting configuration
+        self.learningDb = self.loadLearningDatabase()
         
         # Parameter safety limits
         self.parameterLimits = {
