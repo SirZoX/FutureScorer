@@ -169,10 +169,13 @@ def updateSelectionLogWithRealOrderIds(opportunityId, pair, record):
         # Extract real order IDs
         tpId = record.get("tpOrderId2") or record.get("tpOrderId1", "")
         slId = record.get("slOrderId2") or record.get("slOrderId1", "")
-        realOrderId = f"{tpId}-{slId}" if (tpId or slId) else ""
         
-        if not realOrderId:
+        if not tpId and not slId:
+            messages(f"[SELECTION-LOG] No real order IDs found for {pair}", console=0, log=1, telegram=0)
             return
+        
+        # Normalize pair name to match selectionLog format (SYMBOL_USDT)
+        normalizedPair = pair.replace('/USDT:USDT', '_USDT').replace('/USDT', '_USDT')
         
         # Read current selectionLog
         rows = []
@@ -181,26 +184,55 @@ def updateSelectionLogWithRealOrderIds(opportunityId, pair, record):
             header = next(reader)
             rows = [header]
             
-            # Find id column index
+            # Find column indices
             idIdx = header.index('id') if 'id' in header else -1
-            if idIdx == -1:
+            pairIdx = header.index('pair') if 'pair' in header else -1
+            tpOrderIdx = header.index('tp_order_id') if 'tp_order_id' in header else -1
+            slOrderIdx = header.index('sl_order_id') if 'sl_order_id' in header else -1
+            
+            if idIdx == -1 or pairIdx == -1:
+                messages(f"[SELECTION-LOG] Required columns not found in selectionLog", console=0, log=1, telegram=0)
                 return
                 
-            # Update the row with matching timestamp+pair
+            # Update the row with matching opportunityId or most recent matching pair
+            updated = False
+            matchingRows = []
+            
             for row in reader:
-                if len(row) > 3 and row[3] == pair:
-                    # Check if this is recent (last few entries) by looking at timestamp
-                    try:
-                        rowTimestamp = int(row[2]) if len(row) > 2 else 0
-                        currentTimestamp = int(time.time())
-                        # If within last 5 minutes, assume it's our opportunity
-                        if abs(currentTimestamp - rowTimestamp) < 300:
-                            row[idIdx] = realOrderId  # Update with real order IDs
-                            messages(f"[SELECTION-LOG] Updated {pair} with real order IDs: {realOrderId}", console=0, log=1, telegram=0)
-                            break
-                    except:
-                        pass
+                # First try to match by opportunityId (exact match)
+                if len(row) > idIdx and row[idIdx] == opportunityId:
+                    if tpOrderIdx >= 0 and len(row) > tpOrderIdx:
+                        row[tpOrderIdx] = tpId
+                    if slOrderIdx >= 0 and len(row) > slOrderIdx:
+                        row[slOrderIdx] = slId
+                    messages(f"[SELECTION-LOG] Updated {normalizedPair} (ID: {opportunityId}) with TP: {tpId}, SL: {slId}", console=0, log=1, telegram=0)
+                    updated = True
+                # If no exact ID match, collect matching pairs for fallback
+                elif len(row) > pairIdx and row[pairIdx] == normalizedPair:
+                    matchingRows.append((len(rows), row))
+                
                 rows.append(row)
+            
+            # If no exact ID match, update the most recent matching pair (last 2 minutes)
+            if not updated and matchingRows:
+                try:
+                    currentTimestamp = int(time.time())
+                    for rowIdx, row in reversed(matchingRows):  # Start from most recent
+                        rowTimestamp = int(row[2]) if len(row) > 2 else 0
+                        # If within last 2 minutes, assume it's our opportunity
+                        if abs(currentTimestamp - rowTimestamp) < 120:
+                            if tpOrderIdx >= 0 and len(row) > tpOrderIdx:
+                                rows[rowIdx][tpOrderIdx] = tpId
+                            if slOrderIdx >= 0 and len(row) > slOrderIdx:
+                                rows[rowIdx][slOrderIdx] = slId
+                            messages(f"[SELECTION-LOG] Updated recent {normalizedPair} entry with TP: {tpId}, SL: {slId}", console=0, log=1, telegram=0)
+                            updated = True
+                            break
+                except Exception as te:
+                    messages(f"[SELECTION-LOG] Error parsing timestamp for {normalizedPair}: {te}", console=0, log=1, telegram=0)
+        
+        if not updated:
+            messages(f"[SELECTION-LOG] No matching entry found for {normalizedPair} (ID: {opportunityId}) to update with order IDs", console=0, log=1, telegram=0)
         
         # Write back updated selectionLog
         with open(gvars.selectionLogFile, 'w', encoding='utf-8', newline='') as f:
