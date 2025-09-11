@@ -705,6 +705,21 @@ def analyzePairs():
             helpers.fmt((record or {}).get("slPercent", 0), 1),
             str((record or {}).get("leverage", 0)),
             helpers.fmt((record or {}).get("investment_usdt", 0), 4),
+            # Config variables from usdcInvestment downwards
+            str(configData.get("usdcInvestment", 0)),
+            str(configData.get("maxOpenPositions", 0)),
+            str(configData.get("timeframe", "")),
+            str(configData.get("requestedCandles", 0)),
+            helpers.fmt(configData.get("tp1", 0), 2),
+            helpers.fmt(configData.get("tp2", 0), 2),
+            helpers.fmt(configData.get("sl1", 0), 2),
+            str(configData.get("topCoinsPctAnalyzed", 0)),
+            helpers.fmt(configData.get("minPctBounceAllowed", 0), 6),
+            helpers.fmt(configData.get("maxPctBounceAllowed", 0), 6),
+            str(configData.get("minCandlesSeparationToFindSupportLine", 0)),
+            helpers.fmt(configData.get("scoreThreshold", 0), 3),
+            str(configData.get("lastCandleMinUSDVolume", 0)),
+            str(configData.get("last24hrsPairVolume", 0)),
             "",  # profitQuote - to be filled when position closes
             "",  # profitPct - to be filled when position closes
             "",  # close_ts_iso - to be filled when position closes
