@@ -188,6 +188,16 @@ def timeframeScheduled(tf:str,lim:int):
 
 
 
+def runUpdateAndAnalysisSequentially():
+    """
+    Execute updatePairs followed by analyzePairs sequentially to avoid conflicts
+    """
+    try:
+        pairs.updatePairs()
+        pairs.analyzePairs()
+    except Exception as e:
+        messages(f"[ERROR] Error in sequential update/analysis: {e}", console=1, log=1, telegram=0)
+
 # Schedule tasks based on timeframe
 def setupSchedules(tf: str):
     """
@@ -211,40 +221,35 @@ def setupSchedules(tf: str):
         # every hour at minute multiples
         for mm in range(0, 60, period):
             atStr = f":{mm:02d}"
-            schedule.every().hour.at(atStr).do(pairs.updatePairs)
-            schedule.every().hour.at(atStr).do(pairs.analyzePairs)
-        unit_desc = f"each {period} minutes aligned"
+            schedule.every().hour.at(atStr).do(runUpdateAndAnalysisSequentially)
+        unit_desc = f"each {period} minutes aligned (sequential execution)"
 
     elif unit == 'h' and 24 % period == 0:
         # every day at hour multiples
         for hh in range(0, 24, period):
             atStr = f"{hh:02d}:00"
-            schedule.every().day.at(atStr).do(pairs.updatePairs)
-            schedule.every().day.at(atStr).do(pairs.analyzePairs)
-        unit_desc = f"every {period} hour(s) aligned"
+            schedule.every().day.at(atStr).do(runUpdateAndAnalysisSequentially)
+        unit_desc = f"every {period} hour(s) aligned (sequential execution)"
 
     elif unit == 'd':
         # every N days at midnight
         atStr = "00:00"
-        schedule.every(period).days.at(atStr).do(pairs.updatePairs)
-        schedule.every(period).days.at(atStr).do(pairs.analyzePairs)
-        unit_desc = f"every {period} day(s) at {atStr}"
+        schedule.every(period).days.at(atStr).do(runUpdateAndAnalysisSequentially)
+        unit_desc = f"every {period} day(s) at {atStr} (sequential execution)"
 
     else:
         # fallback to simple interval scheduling
         if unit == 'm':
-            schedule.every(period).minutes.do(pairs.updatePairs)
-            schedule.every(period).minutes.do(pairs.analyzePairs)
-            unit_desc = f"every {period} minute(s) (unaligned)"
+            schedule.every(period).minutes.do(runUpdateAndAnalysisSequentially)
+            unit_desc = f"every {period} minute(s) (sequential execution)"
         elif unit == 'h':
-            schedule.every(period).hours.do(pairs.updatePairs)
-            schedule.every(period).hours.do(pairs.analyzePairs)
-            unit_desc = f"every {period} hour(s) (unaligned)"
+            schedule.every(period).hours.do(runUpdateAndAnalysisSequentially)
+            unit_desc = f"every {period} hour(s) (sequential execution)"
         else:
             messages(f"[ERROR] Unknown timeframe unit: '{unit}'", console=1, log=1, telegram=1)
             sys.exit(1)
 
-    messages(f"Scheduled pairs.updatePairs/pairs.analyzePairs {unit_desc}", console=0, log=1, telegram=0)
+    messages(f"Scheduled sequential update+analysis {unit_desc}", console=0, log=1, telegram=0)
 
 
 
@@ -328,9 +333,7 @@ if __name__ == "__main__":
 
     if forceRun:
         messages("Force flag detected: running initial update & analysis", console=1, log=1, telegram=0)
-        pairs.updatePairs()
-        # monitorActive.clear()  # Disabled - position monitor removed
-        pairs.analyzePairs()
+        runUpdateAndAnalysisSequentially()
         # monitorActive.set()    # Disabled - position monitor removed
         # positionMonitor.printPositionsTable()  # Disabled - position monitor removed
         # startPositionMonitor()  # Disabled - position monitor removed
