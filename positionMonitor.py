@@ -4,13 +4,94 @@ from datetime import datetime
 import os
 import sys
 import re
-from gvars import positionsFile
-import orderManager
+import csv
+from gvars import positionsFile, tradesLogFile
 
 # Global variables for rate limiting
 lastApiCall = 0
 apiCallInterval = 1.0  # Minimum 1 second between API calls
 rateLimitBackoff = 60  # Start with 60 seconds backoff when rate limited
+
+def logTradeDirectly(symbol, position, closeReason, netProfitUsdt):
+    """
+    Log trade directly to trades.csv without creating OrderManager instance
+    """
+    try:
+        # Extract position data
+        openDateIso = position.get('timestamp', '')  # Format: "2025-08-26 16-30-59"
+        openPrice = float(position.get('openPrice', 0))
+        amount = float(position.get('amount', 0))
+        leverage = int(position.get('leverage', 10))
+        side = position.get('side', 'UNKNOWN')
+        
+        # Calculate investment (amount * price / leverage)
+        investmentUsdt = (amount * openPrice) / leverage
+        
+        # Format dates
+        currentTime = datetime.now()
+        
+        if openDateIso:
+            try:
+                openDateObj = datetime.strptime(openDateIso, '%Y-%m-%d %H-%M-%S')
+                openDateHuman = openDateObj.strftime('%Y-%m-%d %H:%M:%S')
+            except Exception:
+                openDateHuman = openDateIso
+                openDateObj = None
+        else:
+            openDateHuman = "Unknown"
+            openDateObj = None
+        
+        closeDateHuman = currentTime.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Calculate elapsed time
+        if openDateObj:
+            try:
+                elapsed = currentTime - openDateObj
+                totalSeconds = int(elapsed.total_seconds())
+                hours = totalSeconds // 3600
+                minutes = (totalSeconds % 3600) // 60
+                seconds = totalSeconds % 60
+                
+                if hours > 0:
+                    elapsedHuman = f"{hours}h {minutes}m {seconds}s"
+                elif minutes > 0:
+                    elapsedHuman = f"{minutes}m {seconds}s"
+                else:
+                    elapsedHuman = f"{seconds}s"
+            except Exception:
+                elapsedHuman = "Unknown"
+        else:
+            elapsedHuman = "Unknown"
+        
+        # Prepare trade record
+        tradeRecord = {
+            'symbol': symbol,
+            'open_date': openDateHuman,
+            'close_date': closeDateHuman,
+            'elapsed': elapsedHuman,
+            'investment_usdt': f"{investmentUsdt:.4f}",
+            'leverage': str(leverage),
+            'net_profit_usdt': f"{netProfitUsdt:.4f}",
+            'side': side
+        }
+        
+        # Check if file exists and has header
+        fileExists = os.path.exists(tradesLogFile)
+        
+        # Append the trade record
+        with open(tradesLogFile, 'a', encoding='utf-8', newline='') as f:
+            fieldnames = ['symbol', 'open_date', 'close_date', 'elapsed', 'investment_usdt', 'leverage', 'net_profit_usdt', 'side']
+            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=';')
+            
+            # Write header if file is new or empty
+            if not fileExists or os.path.getsize(tradesLogFile) == 0:
+                writer.writeheader()
+            
+            writer.writerow(tradeRecord)
+            
+    except Exception as e:
+        from logManager import messages
+        messages(f"[TRADE-LOG] Error logging trade directly for {symbol}: {e}", console=0, log=1, telegram=0)
 
 def detectSandboxMode():
     """
@@ -251,9 +332,8 @@ def notifyClosedPositions():
                     
                     # Log the trade to trades.csv
                     try:
-                        # Create orderManager instance to log the trade
-                        orderMgr = orderManager.OrderManager()
-                        orderMgr.logTradeFromPosition(symbol, pos, closeReason, pnlQuote)
+                        # Log trade directly here to avoid circular dependency
+                        logTradeDirectly(symbol, pos, closeReason, pnlQuote)
                         messages(f"[TRADE-LOG] Trade logged to trades.csv for {symbol}", console=0, log=1, telegram=0)
                     except Exception as tradeLogError:
                         messages(f"[TRADE-LOG] Error logging trade for {symbol}: {tradeLogError}", console=0, log=1, telegram=0)
