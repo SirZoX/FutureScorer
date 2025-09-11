@@ -10,7 +10,7 @@ import numpy as np
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 import gvars
-import configManager
+from configManager import configManager
 from logManager import messages
 
 
