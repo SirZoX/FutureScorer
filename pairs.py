@@ -138,6 +138,8 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             if record:
                 results['opened'] += 1
                 messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opened successfully", console=0, log=1, telegram=0, pair=pair)
+                # Update selectionLog with real order IDs from successful execution
+                updateSelectionLogWithRealOrderIds(opportunity.get('opportunityId'), pair, record)
             else:
                 results['failed'] += 1
                 messages(f"[{i}/{len(approvedOpportunities)}] {pair} position opening failed", console=0, log=1, telegram=0, pair=pair)
@@ -151,6 +153,62 @@ def executeOpportunitiesSequentially(approvedOpportunities, configData):
             updateSelectionLogForExecutionFailure(opportunity.get('opportunityId'), opportunity['pair'])
     
     return results
+
+
+def updateSelectionLogWithRealOrderIds(opportunityId, pair, record):
+    """
+    Update selectionLog.csv with real order IDs from successful execution
+    """
+    if not record:
+        return
+        
+    try:
+        import csv
+        import gvars
+        
+        # Extract real order IDs
+        tpId = record.get("tpOrderId2") or record.get("tpOrderId1", "")
+        slId = record.get("slOrderId2") or record.get("slOrderId1", "")
+        realOrderId = f"{tpId}-{slId}" if (tpId or slId) else ""
+        
+        if not realOrderId:
+            return
+        
+        # Read current selectionLog
+        rows = []
+        with open(gvars.selectionLogFile, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f, delimiter=';')
+            header = next(reader)
+            rows = [header]
+            
+            # Find id column index
+            idIdx = header.index('id') if 'id' in header else -1
+            if idIdx == -1:
+                return
+                
+            # Update the row with matching timestamp+pair
+            for row in reader:
+                if len(row) > 3 and row[3] == pair:
+                    # Check if this is recent (last few entries) by looking at timestamp
+                    try:
+                        rowTimestamp = int(row[2]) if len(row) > 2 else 0
+                        currentTimestamp = int(time.time())
+                        # If within last 5 minutes, assume it's our opportunity
+                        if abs(currentTimestamp - rowTimestamp) < 300:
+                            row[idIdx] = realOrderId  # Update with real order IDs
+                            messages(f"[SELECTION-LOG] Updated {pair} with real order IDs: {realOrderId}", console=0, log=1, telegram=0)
+                            break
+                    except:
+                        pass
+                rows.append(row)
+        
+        # Write back updated selectionLog
+        with open(gvars.selectionLogFile, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerows(rows)
+            
+    except Exception as e:
+        messages(f"[ERROR] Failed to update selectionLog with real order IDs for {pair}: {e}", console=0, log=1, telegram=0)
 
 
 def updateSelectionLogForExecutionFailure(opportunityId, pair):
