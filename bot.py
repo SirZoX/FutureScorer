@@ -34,6 +34,7 @@ import orderManager
 import gvars
 import helpers
 import pairs
+from positionSyncer import syncPositionsWithExchange
 
 from configManager import configManager
 from validators import validateConfigStructure
@@ -188,9 +189,20 @@ def timeframeScheduled(tf:str,lim:int):
 
 
 
+def runPositionSync():
+    """
+    Run position synchronization independently (1 minute before analysis)
+    """
+    try:
+        messages("[SYNC] Running scheduled position synchronization", console=0, log=1, telegram=0)
+        syncPositionsWithExchange()
+    except Exception as e:
+        messages(f"[ERROR] Error in position sync: {e}", console=1, log=1, telegram=0)
+
 def runUpdateAndAnalysisSequentially():
     """
     Execute updatePairs followed by analyzePairs sequentially to avoid conflicts
+    Position sync is now handled separately 1 minute before this runs
     """
     try:
         pairs.updatePairs()
@@ -205,6 +217,7 @@ def setupSchedules(tf: str):
       - 'Nm' with N divisor of 60: every hour at minutes 0, N, 2N, ...
       - 'Nh' with N divisor of 24: every day at hours 0, N, 2N, ...
       - 'Nd': every N days at midnight
+    Also schedules position synchronization 1 minute before each analysis
     """
 
     try:
@@ -220,31 +233,55 @@ def setupSchedules(tf: str):
     if unit == 'm' and 60 % period == 0:
         # every hour at minute multiples
         for mm in range(0, 60, period):
+            # Schedule sync 1 minute before analysis
+            syncMm = (mm - 1) % 60
+            syncAtStr = f":{syncMm:02d}"
+            schedule.every().hour.at(syncAtStr).do(runPositionSync)
+            
+            # Schedule main analysis
             atStr = f":{mm:02d}"
             schedule.every().hour.at(atStr).do(runUpdateAndAnalysisSequentially)
-        unit_desc = f"each {period} minutes aligned (sequential execution)"
+        unit_desc = f"each {period} minutes aligned (with pre-sync)"
 
     elif unit == 'h' and 24 % period == 0:
         # every day at hour multiples
         for hh in range(0, 24, period):
+            # Schedule sync 1 minute before analysis
+            if hh == 0:
+                syncAtStr = "23:59"  # Previous day
+                schedule.every().day.at(syncAtStr).do(runPositionSync)
+            else:
+                syncHh = hh - 1 if (hh * 60 - 1) >= 0 else 23
+                syncAtStr = f"{syncHh:02d}:59"
+                schedule.every().day.at(syncAtStr).do(runPositionSync)
+            
+            # Schedule main analysis
             atStr = f"{hh:02d}:00"
             schedule.every().day.at(atStr).do(runUpdateAndAnalysisSequentially)
-        unit_desc = f"every {period} hour(s) aligned (sequential execution)"
+        unit_desc = f"every {period} hour(s) aligned (with pre-sync)"
 
     elif unit == 'd':
         # every N days at midnight
+        syncAtStr = "23:59"
+        schedule.every(period).days.at(syncAtStr).do(runPositionSync)
+        
         atStr = "00:00"
         schedule.every(period).days.at(atStr).do(runUpdateAndAnalysisSequentially)
-        unit_desc = f"every {period} day(s) at {atStr} (sequential execution)"
+        unit_desc = f"every {period} day(s) at {atStr} (with pre-sync)"
 
     else:
         # fallback to simple interval scheduling
         if unit == 'm':
-            schedule.every(period).minutes.do(runUpdateAndAnalysisSequentially)
-            unit_desc = f"every {period} minute(s) (sequential execution)"
+            # For minute intervals, sync happens just before each analysis
+            schedule.every(period).minutes.do(runPositionSync)
+            # Offset analysis by a few seconds to ensure sync runs first
+            schedule.every(period).minutes.do(lambda: time.sleep(10) or runUpdateAndAnalysisSequentially())
+            unit_desc = f"every {period} minute(s) (with pre-sync)"
         elif unit == 'h':
-            schedule.every(period).hours.do(runUpdateAndAnalysisSequentially)
-            unit_desc = f"every {period} hour(s) (sequential execution)"
+            # For hour intervals, sync 1 minute before
+            schedule.every(period).hours.do(runPositionSync)
+            schedule.every(period).hours.do(lambda: time.sleep(60) or runUpdateAndAnalysisSequentially())
+            unit_desc = f"every {period} hour(s) (with pre-sync)"
         else:
             messages(f"[ERROR] Unknown timeframe unit: '{unit}'", console=1, log=1, telegram=1)
             sys.exit(1)
