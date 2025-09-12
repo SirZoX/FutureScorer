@@ -238,10 +238,20 @@ class IntelligentParameterOptimizer:
         if newThreshold:
             newParams["scoreThreshold"] = newThreshold
         
-        # TODO: Add more parameter optimizations
-        # - tolerancePct
-        # - scoringWeights
-        # - minTouches
+        # Optimize tolerancePct
+        newTolerance = self.optimizeTolerancePct(profitable, losses)
+        if newTolerance:
+            newParams["tolerancePct"] = newTolerance
+        
+        # Optimize minTouches
+        newMinTouches = self.optimizeMinTouches(profitable, losses)
+        if newMinTouches:
+            newParams["minTouches"] = newMinTouches
+        
+        # Optimize scoringWeights
+        newWeights = self.optimizeScoringWeights(profitable, losses)
+        if newWeights:
+            newParams["scoringWeights"] = newWeights
         
         return newParams if newParams else None
     
@@ -295,6 +305,178 @@ class IntelligentParameterOptimizer:
             
         except Exception as e:
             messages(f"[OPTIMIZER] Error optimizing score threshold: {e}", console=0, log=1, telegram=0)
+            return None
+    
+    def optimizeTolerancePct(self, profitable: List, losses: List) -> Optional[float]:
+        """Optimize the tolerance percentage parameter"""
+        try:
+            # Get current tolerance
+            currentTolerance = configManager.config.get("tolerancePct", 0.0075)
+            
+            # Extract tolerance values from profitable and losing positions
+            profitTolerances = []
+            lossTolerances = []
+            
+            for p in profitable:
+                if "tolerancePct" in p["entryParams"]:
+                    profitTolerances.append(p["entryParams"]["tolerancePct"])
+            
+            for p in losses:
+                if "tolerancePct" in p["entryParams"]:
+                    lossTolerances.append(p["entryParams"]["tolerancePct"])
+            
+            if not profitTolerances or not lossTolerances:
+                return None
+            
+            # Calculate average tolerance for profitable vs losing trades
+            avgProfitTolerance = np.mean(profitTolerances)
+            avgLossTolerance = np.mean(lossTolerances)
+            
+            # If profitable trades used lower tolerance on average, reduce it
+            # If profitable trades used higher tolerance, increase it slightly
+            if avgProfitTolerance < avgLossTolerance:
+                newTolerance = currentTolerance * 0.95  # Reduce by 5%
+            elif avgProfitTolerance > avgLossTolerance:
+                newTolerance = currentTolerance * 1.05  # Increase by 5%
+            else:
+                return None  # No clear pattern
+            
+            # Apply safety limits
+            limits = self.parameterLimits["tolerancePct"]
+            newTolerance = max(limits["min"], min(limits["max"], newTolerance))
+            
+            # Apply maximum change limit
+            maxChange = currentTolerance * self.maxChangePerOptimization
+            if abs(newTolerance - currentTolerance) > maxChange:
+                if newTolerance > currentTolerance:
+                    newTolerance = currentTolerance + maxChange
+                else:
+                    newTolerance = currentTolerance - maxChange
+            
+            # Only return if change is significant (>2%)
+            if abs(newTolerance - currentTolerance) / currentTolerance > 0.02:
+                messages(f"[OPTIMIZER] Tolerance: {currentTolerance:.4f} → {newTolerance:.4f}", 
+                        console=1, log=1, telegram=0)
+                return round(newTolerance, 4)
+            
+            return None
+            
+        except Exception as e:
+            messages(f"[OPTIMIZER] Error optimizing tolerance: {e}", console=0, log=1, telegram=0)
+            return None
+    
+    def optimizeMinTouches(self, profitable: List, losses: List) -> Optional[int]:
+        """Optimize the minimum touches parameter"""
+        try:
+            # Get current minTouches
+            currentMinTouches = configManager.config.get("minTouches", 3)
+            
+            # Extract minTouches values from profitable and losing positions
+            profitTouches = []
+            lossTouches = []
+            
+            for p in profitable:
+                if "minTouches" in p["entryParams"]:
+                    profitTouches.append(p["entryParams"]["minTouches"])
+            
+            for p in losses:
+                if "minTouches" in p["entryParams"]:
+                    lossTouches.append(p["entryParams"]["minTouches"])
+            
+            if not profitTouches or not lossTouches:
+                return None
+            
+            # Calculate mode (most common value) for profitable vs losing trades
+            from collections import Counter
+            profitMode = Counter(profitTouches).most_common(1)[0][0]
+            lossMode = Counter(lossTouches).most_common(1)[0][0]
+            
+            # If profitable trades typically used different minTouches, move towards that
+            if profitMode != lossMode:
+                newMinTouches = profitMode
+            else:
+                return None  # No clear pattern
+            
+            # Apply safety limits
+            limits = self.parameterLimits["minTouches"]
+            newMinTouches = max(limits["min"], min(limits["max"], newMinTouches))
+            
+            # Only return if change is significant
+            if newMinTouches != currentMinTouches:
+                messages(f"[OPTIMIZER] Min touches: {currentMinTouches} → {newMinTouches}", 
+                        console=1, log=1, telegram=0)
+                return newMinTouches
+            
+            return None
+            
+        except Exception as e:
+            messages(f"[OPTIMIZER] Error optimizing min touches: {e}", console=0, log=1, telegram=0)
+            return None
+    
+    def optimizeScoringWeights(self, profitable: List, losses: List) -> Optional[Dict]:
+        """Optimize the scoring weights parameters"""
+        try:
+            # Get current weights
+            currentWeights = configManager.config.get("scoringWeights", {
+                "distance": 0.2, "volume": 0.35, "momentum": 0.25, "touches": 0.2
+            })
+            
+            # Extract scoring weights from profitable and losing positions
+            profitWeights = []
+            lossWeights = []
+            
+            for p in profitable:
+                if "scoringWeights" in p["entryParams"] and p["entryParams"]["scoringWeights"]:
+                    profitWeights.append(p["entryParams"]["scoringWeights"])
+            
+            for p in losses:
+                if "scoringWeights" in p["entryParams"] and p["entryParams"]["scoringWeights"]:
+                    lossWeights.append(p["entryParams"]["scoringWeights"])
+            
+            if not profitWeights or not lossWeights:
+                return None
+            
+            # Calculate average weights for profitable vs losing trades
+            newWeights = {}
+            hasChanges = False
+            
+            for weight_name in ["distance", "volume", "momentum", "touches"]:
+                profitAvg = np.mean([w.get(weight_name, 0) for w in profitWeights])
+                lossAvg = np.mean([w.get(weight_name, 0) for w in lossWeights])
+                currentWeight = currentWeights.get(weight_name, 0.25)
+                
+                # Move slightly towards profitable pattern
+                if profitAvg > lossAvg:
+                    newWeight = currentWeight * 1.02  # Increase by 2%
+                elif profitAvg < lossAvg:
+                    newWeight = currentWeight * 0.98  # Decrease by 2%
+                else:
+                    newWeight = currentWeight
+                
+                # Apply safety limits
+                limits = self.parameterLimits["scoringWeights"][weight_name]
+                newWeight = max(limits["min"], min(limits["max"], newWeight))
+                
+                # Check if change is significant (>1%)
+                if abs(newWeight - currentWeight) / currentWeight > 0.01:
+                    newWeights[weight_name] = round(newWeight, 3)
+                    hasChanges = True
+                    messages(f"[OPTIMIZER] Weight {weight_name}: {currentWeight:.3f} → {newWeight:.3f}", 
+                            console=1, log=1, telegram=0)
+                else:
+                    newWeights[weight_name] = currentWeight
+            
+            # Normalize weights to sum to 1.0
+            if hasChanges:
+                total = sum(newWeights.values())
+                for key in newWeights:
+                    newWeights[key] = round(newWeights[key] / total, 3)
+                return newWeights
+            
+            return None
+            
+        except Exception as e:
+            messages(f"[OPTIMIZER] Error optimizing scoring weights: {e}", console=0, log=1, telegram=0)
             return None
     
     def updateConfiguration(self, newParams: Dict):
