@@ -1,6 +1,7 @@
 
 import requests
 import json
+import time
 import gvars
 from logManager import messages
 from configManager import configManager
@@ -64,8 +65,25 @@ def checkTelegram():
                             messages("❌ OrderManager not available", console=0, log=0, telegram=1)
                     except Exception as e:
                         messages(f"❌ Position summary failed: {e}", console=0, log=0, telegram=1)
+    except requests.exceptions.ReadTimeout as e:
+        messages(f"Telegram read timeout detected - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+        time.sleep(15)  # Pause the entire script for 15 seconds
+        messages("Resuming bot operations after Telegram timeout pause", console=1, log=1, telegram=0)
+    except requests.exceptions.Timeout as e:
+        messages(f"Telegram timeout detected - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+        time.sleep(15)  # Pause the entire script for 15 seconds
+        messages("Resuming bot operations after Telegram timeout pause", console=1, log=1, telegram=0)
     except Exception as e:
-        messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
+        # Check if the error message contains timeout indicators
+        error_str = str(e).lower()
+        if ('read timed out' in error_str or 
+            'timeout' in error_str or 
+            'readtimeout' in error_str):
+            messages(f"Telegram timeout error detected - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+            time.sleep(15)  # Pause the entire script for 15 seconds
+            messages("Resuming bot operations after Telegram timeout pause", console=1, log=1, telegram=0)
+        else:
+            messages(f"Error at checkTelegram: {e}", console=1, log=1, telegram=0)
     
 
 

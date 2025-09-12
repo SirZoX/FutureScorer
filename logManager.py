@@ -133,13 +133,29 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
                     }
                     if caption:
                         data['caption'] = caption
-                    resp = requests.post(apiUrl, files=files, data=data)
+                    resp = requests.post(apiUrl, files=files, data=data, timeout=10)
                     if resp.status_code != 200:
                         messages(f"Error sending photo {norm_path}: {resp.text}", console=1, log=1, telegram=0)
                     else:
                         successful_sends.append(norm_path)
+            except requests.exceptions.ReadTimeout as e:
+                messages(f"Telegram photo timeout - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+                time.sleep(15)
+                messages("Resuming after Telegram photo timeout pause", console=1, log=1, telegram=0)
+            except requests.exceptions.Timeout as e:
+                messages(f"Telegram photo timeout - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+                time.sleep(15)
+                messages("Resuming after Telegram photo timeout pause", console=1, log=1, telegram=0)
             except Exception as e:
-                messages(f"Exception sending photo {norm_path}: {e}", console=1, log=1, telegram=0)
+                error_str = str(e).lower()
+                if ('read timed out' in error_str or 
+                    'timeout' in error_str or 
+                    'readtimeout' in error_str):
+                    messages(f"Telegram photo timeout error - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+                    time.sleep(15)
+                    messages("Resuming after Telegram photo timeout pause", console=1, log=1, telegram=0)
+                else:
+                    messages(f"Exception sending photo {norm_path}: {e}", console=1, log=1, telegram=0)
         if successful_sends:
             messages(f"Plots sent successfully: {len(successful_sends)} files", console=0, log=1, telegram=0)
     elif text:
@@ -150,11 +166,27 @@ def sendTelegramMessage(text=None, plotPaths=None, caption=None, token=None, cha
             'parse_mode': 'HTML'
         }
         try:
-            resp = requests.post(apiUrl, data=data)
+            resp = requests.post(apiUrl, data=data, timeout=10)
             if resp.status_code != 200:
                 messages(f"Error sending text to Telegram: {resp.text}", console=1, log=1, telegram=0)
+        except requests.exceptions.ReadTimeout as e:
+            messages(f"Telegram text timeout - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+            time.sleep(15)
+            messages("Resuming after Telegram text timeout pause", console=1, log=1, telegram=0)
+        except requests.exceptions.Timeout as e:
+            messages(f"Telegram text timeout - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+            time.sleep(15)
+            messages("Resuming after Telegram text timeout pause", console=1, log=1, telegram=0)
         except Exception as e:
-            messages(f"Exception sending text to Telegram: {e}", console=1, log=1, telegram=0)
+            error_str = str(e).lower()
+            if ('read timed out' in error_str or 
+                'timeout' in error_str or 
+                'readtimeout' in error_str):
+                messages(f"Telegram text timeout error - pausing bot for 15 seconds: {e}", console=1, log=1, telegram=0)
+                time.sleep(15)
+                messages("Resuming after Telegram text timeout pause", console=1, log=1, telegram=0)
+            else:
+                messages(f"Exception sending text to Telegram: {e}", console=1, log=1, telegram=0)
 
 
 
