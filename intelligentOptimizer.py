@@ -190,7 +190,7 @@ class IntelligentParameterOptimizer:
         """Run the parameter optimization process"""
         try:
             messages(f"🧠 [OPTIMIZER] Starting optimization with {self.learningDb['totalClosedPositions']} positions", 
-                    console=1, log=1, telegram=1)
+                    console=0, log=1, telegram=0)
             
             # Calculate new optimal parameters
             newParams = self.calculateOptimalParameters()
@@ -203,9 +203,9 @@ class IntelligentParameterOptimizer:
                 self.recordOptimization(newParams)
                 
                 messages(f"🎯 [OPTIMIZER] Optimization completed: {newParams}", 
-                        console=1, log=1, telegram=1)
+                        console=0, log=1, telegram=0)
             else:
-                messages("[OPTIMIZER] No parameter changes needed", console=1, log=1, telegram=0)
+                messages("[OPTIMIZER] No parameter changes needed", console=0, log=1, telegram=0)
                 
         except Exception as e:
             messages(f"[OPTIMIZER] Error during optimization: {e}", console=0, log=1, telegram=0)
@@ -229,7 +229,7 @@ class IntelligentParameterOptimizer:
         # Calculate win rate
         winRate = len(profitable) / len(positions)
         messages(f"[OPTIMIZER] Current win rate: {winRate:.2%} ({len(profitable)}/{len(positions)})", 
-                console=1, log=1, telegram=0)
+                console=0, log=1, telegram=0)
         
         newParams = {}
         
@@ -298,7 +298,7 @@ class IntelligentParameterOptimizer:
             # Only return if change is significant (>1%)
             if abs(newThreshold - currentThreshold) / currentThreshold > 0.01:
                 messages(f"[OPTIMIZER] Score threshold: {currentThreshold:.3f} → {newThreshold:.3f}", 
-                        console=1, log=1, telegram=0)
+                        console=0, log=1, telegram=0)
                 return round(newThreshold, 3)
             
             return None
@@ -356,7 +356,7 @@ class IntelligentParameterOptimizer:
             # Only return if change is significant (>2%)
             if abs(newTolerance - currentTolerance) / currentTolerance > 0.02:
                 messages(f"[OPTIMIZER] Tolerance: {currentTolerance:.4f} → {newTolerance:.4f}", 
-                        console=1, log=1, telegram=0)
+                        console=0, log=1, telegram=0)
                 return round(newTolerance, 4)
             
             return None
@@ -404,7 +404,7 @@ class IntelligentParameterOptimizer:
             # Only return if change is significant
             if newMinTouches != currentMinTouches:
                 messages(f"[OPTIMIZER] Min touches: {currentMinTouches} → {newMinTouches}", 
-                        console=1, log=1, telegram=0)
+                        console=0, log=1, telegram=0)
                 return newMinTouches
             
             return None
@@ -462,7 +462,7 @@ class IntelligentParameterOptimizer:
                     newWeights[weight_name] = round(newWeight, 3)
                     hasChanges = True
                     messages(f"[OPTIMIZER] Weight {weight_name}: {currentWeight:.3f} → {newWeight:.3f}", 
-                            console=1, log=1, telegram=0)
+                            console=0, log=1, telegram=0)
                 else:
                     newWeights[weight_name] = currentWeight
             
@@ -489,7 +489,7 @@ class IntelligentParameterOptimizer:
             # Save to file
             configManager.saveConfig()
             
-            messages(f"[OPTIMIZER] Configuration updated with new parameters", console=1, log=1, telegram=0)
+            messages(f"[OPTIMIZER] Configuration updated with new parameters", console=0, log=1, telegram=0)
             
         except Exception as e:
             messages(f"[OPTIMIZER] Error updating configuration: {e}", console=0, log=1, telegram=0)
@@ -558,7 +558,7 @@ class IntelligentParameterOptimizer:
                 addedCount += 1
             
             messages(f"[OPTIMIZER] Loaded {addedCount} historical positions into learning database", 
-                    console=1, log=1, telegram=0)
+                    console=0, log=1, telegram=0)
             return addedCount
             
         except Exception as e:
