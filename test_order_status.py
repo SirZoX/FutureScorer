@@ -1,112 +1,212 @@
 #!/usr/bin/env python3
 """
-Script para probar fetchOrderStatus con un ID de orden específico
+Script interactivo para verificar el estado de órdenes en BingX
 """
 
 import sys
 from connector import bingxConnector
 
-def testFetchOrderStatus(orderId, symbol=None):
+def getUserInput():
     """
-    Prueba fetchOrderStatus con un ID de orden específico
+    Solicita al usuario los datos necesarios de forma interactiva
+    """
+    print("=" * 60)
+    print("VERIFICADOR DE ESTADO DE ÓRDENES - BingX")
+    print("=" * 60)
+    
+    # Solicitar modo
+    while True:
+        print("\nSelecciona el modo:")
+        print("1) Modo TEST (Sandbox)")
+        print("2) Modo REAL (Producción)")
+        mode = input("\nIngresa tu opción (1 o 2): ").strip()
+        
+        if mode == "1":
+            isSandboxMode = True
+            print("✅ Modo TEST seleccionado")
+            break
+        elif mode == "2":
+            isSandboxMode = False
+            print("✅ Modo REAL seleccionado")
+            break
+        else:
+            print("❌ Opción inválida. Ingresa 1 o 2.")
+    
+    # Solicitar ID de orden
+    while True:
+        orderId = input("\nIngresa el ID de la orden: ").strip()
+        if orderId:
+            break
+        else:
+            print("❌ El ID de orden no puede estar vacío.")
+    
+    # Solicitar par (opcional)
+    print("\nIngresa el par (opcional, presiona Enter para omitir):")
+    print("Ejemplos: BTC, ETH, WIF, BONK, SUI")
+    pair = input("Par: ").strip().upper()
+    
+    # Construir symbol si se proporcionó el par
+    symbol = None
+    if pair:
+        # Formato estándar para futuros: PAR/USDT:USDT
+        symbol = f"{pair}/USDT:USDT"
+        print(f"✅ Symbol construido: {symbol}")
+    else:
+        print("✅ Sin symbol especificado")
+    
+    return isSandboxMode, orderId, symbol, pair
+
+def testOrderStatus(isSandboxMode, orderId, symbol, pair):
+    """
+    Prueba el estado de la orden con los parámetros proporcionados
     """
     try:
-        # Detect sandbox mode
-        isSandboxMode = '-test' in sys.argv or '--sandbox' in sys.argv
-        
-        print(f"Conectando a BingX...")
+        print(f"\n{'='*60}")
+        print(f"CONECTANDO A BINGX...")
         print(f"Modo: {'SANDBOX' if isSandboxMode else 'PRODUCCIÓN'}")
         exchange = bingxConnector(isSandbox=isSandboxMode)
-        print(f"Conectado exitosamente\n")
+        print(f"✅ Conectado exitosamente")
         
-        print(f"Probando fetchOrderStatus con:")
+        print(f"\n{'='*60}")
+        print(f"VERIFICANDO ESTADO DE ORDEN:")
         print(f"  Order ID: {orderId}")
+        print(f"  Pair: {pair if pair else 'No especificado'}")
         print(f"  Symbol: {symbol if symbol else 'No especificado'}")
-        print("-" * 50)
+        print(f"{'='*60}")
         
+        # Método 1: fetchOrderStatus
+        print(f"\n🔍 Método 1: fetchOrderStatus")
         try:
             if symbol:
-                # Usar symbol si se proporciona
-                result = exchange.fetchOrderStatus(orderId, symbol)
+                result1 = exchange.fetchOrderStatus(orderId, symbol)
             else:
-                # Solo con ID
-                result = exchange.fetchOrderStatus(orderId)
+                result1 = exchange.fetchOrderStatus(orderId)
                 
-            print(f"✅ ÉXITO - fetchOrderStatus respondió:")
-            print(f"Tipo de respuesta: {type(result)}")
-            print(f"Contenido completo: {result}")
+            print(f"✅ fetchOrderStatus ÉXITO:")
+            print(f"   Estado: {result1}")
             
-            # Si es un dict, mostrar campos importantes de forma estructurada
-            if isinstance(result, dict):
-                print(f"\n📋 CAMPOS IMPORTANTES:")
-                important_fields = ['id', 'clientOrderId', 'symbol', 'type', 'side', 'status', 
-                                   'amount', 'price', 'cost', 'filled', 'remaining', 'average',
-                                   'stopPrice', 'triggerPrice', 'takeProfitPrice', 'stopLossPrice',
-                                   'timestamp', 'datetime', 'lastTradeTimestamp']
+        except Exception as e1:
+            print(f"❌ fetchOrderStatus FALLÓ:")
+            print(f"   Error: {str(e1)}")
+            result1 = None
+        
+        # Método 2: fetch_order
+        print(f"\n🔍 Método 2: fetch_order")
+        try:
+            if symbol:
+                result2 = exchange.fetch_order(orderId, symbol)
+            else:
+                result2 = exchange.fetch_order(orderId)
                 
-                for field in important_fields:
-                    if field in result:
-                        print(f"  {field}: {result[field]}")
+            print(f"✅ fetch_order ÉXITO:")
+            print(f"   Tipo: {type(result2)}")
+            
+            if isinstance(result2, dict):
+                print(f"\n📋 INFORMACIÓN DE LA ORDEN:")
+                importantFields = {
+                    'id': 'ID de Orden',
+                    'clientOrderId': 'Client Order ID', 
+                    'symbol': 'Symbol',
+                    'type': 'Tipo',
+                    'side': 'Side',
+                    'status': 'Estado',
+                    'amount': 'Cantidad',
+                    'price': 'Precio',
+                    'cost': 'Costo',
+                    'filled': 'Ejecutado',
+                    'remaining': 'Restante',
+                    'average': 'Precio Promedio',
+                    'stopPrice': 'Stop Price',
+                    'triggerPrice': 'Trigger Price',
+                    'takeProfitPrice': 'Take Profit',
+                    'stopLossPrice': 'Stop Loss',
+                    'timestamp': 'Timestamp',
+                    'datetime': 'Fecha/Hora'
+                }
+                
+                for field, description in importantFields.items():
+                    if field in result2 and result2[field] is not None:
+                        print(f"   {description}: {result2[field]}")
                         
-                print(f"\n🔍 TODOS LOS CAMPOS DISPONIBLES:")
-                for key, value in result.items():
-                    print(f"  {key}: {value}")
-            
-        except Exception as api_error:
-            print(f"❌ ERROR en fetchOrderStatus:")
-            print(f"Tipo de error: {type(api_error).__name__}")
-            print(f"Mensaje: {str(api_error)}")
-            
-            # Intentar también con fetch_order para comparar
-            print(f"\n🔄 Probando fetch_order para comparar...")
+                print(f"\n🔍 TODOS LOS CAMPOS:")
+                for key, value in result2.items():
+                    print(f"   {key}: {value}")
+            else:
+                print(f"   Resultado: {result2}")
+                
+        except Exception as e2:
+            print(f"❌ fetch_order FALLÓ:")
+            print(f"   Error: {str(e2)}")
+            result2 = None
+        
+        # Método 3: fetchOrders (todas las órdenes del symbol)
+        if symbol:
+            print(f"\n� Método 3: fetchOrders (todas las órdenes de {symbol})")
             try:
-                if symbol:
-                    result2 = exchange.fetch_order(orderId, symbol)
-                else:
-                    result2 = exchange.fetch_order(orderId)
-                    
-                print(f"✅ fetch_order funcionó:")
-                print(f"Tipo de respuesta: {type(result2)}")
-                print(f"Resultado completo: {result2}")
+                result3 = exchange.fetchOrders(symbol=symbol, limit=50)
+                print(f"✅ fetchOrders ÉXITO:")
+                print(f"   Total órdenes encontradas: {len(result3) if result3 else 0}")
                 
-                # Si es un dict, mostrar campos importantes
-                if isinstance(result2, dict):
-                    print(f"\n📋 CAMPOS IMPORTANTES:")
-                    important_fields = ['id', 'clientOrderId', 'symbol', 'type', 'side', 'status', 
-                                       'amount', 'price', 'cost', 'filled', 'remaining', 'average',
-                                       'stopPrice', 'triggerPrice', 'takeProfitPrice', 'stopLossPrice',
-                                       'timestamp', 'datetime', 'lastTradeTimestamp']
+                if result3:
+                    # Buscar nuestra orden específica
+                    targetOrder = None
+                    for order in result3:
+                        if str(order.get('id')) == str(orderId):
+                            targetOrder = order
+                            break
                     
-                    for field in important_fields:
-                        if field in result2:
-                            print(f"  {field}: {result2[field]}")
-                
-            except Exception as api_error2:
-                print(f"❌ fetch_order también falló:")
-                print(f"Error: {str(api_error2)}")
+                    if targetOrder:
+                        print(f"   🎯 ORDEN ENCONTRADA en la lista:")
+                        print(f"      Estado: {targetOrder.get('status')}")
+                        print(f"      Side: {targetOrder.get('side')}")
+                        print(f"      Cantidad: {targetOrder.get('amount')}")
+                        print(f"      Precio: {targetOrder.get('price')}")
+                        print(f"      Ejecutado: {targetOrder.get('filled')}")
+                    else:
+                        print(f"   ⚠️  Orden {orderId} NO encontrada en la lista de órdenes")
+                        
+            except Exception as e3:
+                print(f"❌ fetchOrders FALLÓ:")
+                print(f"   Error: {str(e3)}")
+        
+        return result1, result2
         
     except Exception as e:
-        print(f"❌ Error de conexión: {e}")
+        print(f"❌ ERROR DE CONEXIÓN: {e}")
         import traceback
         traceback.print_exc()
+        return None, None
 
 def main():
-    # Filter out sandbox/test flags from arguments
-    realArgs = [arg for arg in sys.argv[1:] if arg not in ['-test', '--sandbox']]
-    
-    if len(realArgs) < 1:
-        print("Uso: python test_order_status.py [-test] <ORDER_ID> [SYMBOL]")
-        print("Ejemplos:")
-        print("  python test_order_status.py 1965876339668508672")
-        print("  python test_order_status.py 1965876339668508672 WIF/USDT:USDT")
-        print("  python test_order_status.py -test 1965876339668508672")
-        print("  python test_order_status.py -test 1965876339668508672 WIF/USDT:USDT")
-        sys.exit(1)
-    
-    orderId = realArgs[0]
-    symbol = realArgs[1] if len(realArgs) > 1 else None
-    
-    testFetchOrderStatus(orderId, symbol)
+    """
+    Función principal interactiva
+    """
+    try:
+        # Obtener datos del usuario
+        isSandboxMode, orderId, symbol, pair = getUserInput()
+        
+        # Ejecutar verificación
+        result1, result2 = testOrderStatus(isSandboxMode, orderId, symbol, pair)
+        
+        # Preguntar si quiere verificar otra orden
+        print(f"\n{'='*60}")
+        while True:
+            continuar = input("¿Quieres verificar otra orden? (s/n): ").strip().lower()
+            if continuar in ['s', 'si', 'y', 'yes']:
+                print("\n" + "="*60)
+                isSandboxMode, orderId, symbol, pair = getUserInput()
+                result1, result2 = testOrderStatus(isSandboxMode, orderId, symbol, pair)
+                print(f"\n{'='*60}")
+            elif continuar in ['n', 'no']:
+                print("👋 ¡Hasta luego!")
+                break
+            else:
+                print("❌ Respuesta inválida. Ingresa 's' para sí o 'n' para no.")
+        
+    except KeyboardInterrupt:
+        print("\n\n👋 Script interrumpido por el usuario. ¡Hasta luego!")
+    except Exception as e:
+        print(f"\n❌ Error inesperado: {e}")
 
 if __name__ == "__main__":
     main()
