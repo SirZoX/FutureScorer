@@ -14,5 +14,5 @@ if '-test' in sys.argv:
     isSandbox = True
 if '-force' in sys.argv:
     isForce = True
-if '-plots' in sys.argv:
+if '-noplots' in sys.argv:
     generatePlots = True

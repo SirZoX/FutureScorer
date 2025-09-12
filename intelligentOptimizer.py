@@ -482,6 +482,12 @@ class IntelligentParameterOptimizer:
     def updateConfiguration(self, newParams: Dict):
         """Update the configuration file with new parameters"""
         try:
+            # Capture old values before updating
+            oldParams = {}
+            for param in newParams.keys():
+                if param in configManager.config:
+                    oldParams[param] = configManager.config[param]
+            
             # Update in-memory config
             for param, value in newParams.items():
                 configManager.config[param] = value
@@ -489,7 +495,27 @@ class IntelligentParameterOptimizer:
             # Save to file
             configManager.saveConfig()
             
+            # Prepare Telegram message with parameter changes
+            messageText = "🧠 *OPTIMIZER UPDATE*\n\n"
+            messageText += "Parameters optimized based on closed positions:\n\n"
+            
+            for param, newValue in newParams.items():
+                oldValue = oldParams.get(param, "N/A")
+                if isinstance(newValue, float):
+                    newValueStr = f"{newValue:.4f}"
+                    oldValueStr = f"{oldValue:.4f}" if isinstance(oldValue, (int, float)) else str(oldValue)
+                else:
+                    newValueStr = str(newValue)
+                    oldValueStr = str(oldValue)
+                
+                messageText += f"• *{param}*:\n"
+                messageText += f"  └ {oldValueStr} → {newValueStr}\n\n"
+            
+            winRate = self.calculateCurrentWinRate()
+            messageText += f"📊 Current Win Rate: {winRate:.1%}"
+            
             messages(f"[OPTIMIZER] Configuration updated with new parameters", console=0, log=1, telegram=0)
+            messages(messageText, console=0, log=1, telegram=1)
             
         except Exception as e:
             messages(f"[OPTIMIZER] Error updating configuration: {e}", console=0, log=1, telegram=0)
