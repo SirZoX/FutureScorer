@@ -3,11 +3,20 @@ import os
 import json
 import requests
 import inspect
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from gvars import configFile, logsFolder
 from configManager import configManager
 from exceptions import ConfigurationError
+
+def isFileInUse(filePath):
+    """Check if a file is currently being used by another process"""
+    try:
+        with open(filePath, 'a'):
+            return False
+    except IOError:
+        return True
 
 # Aliases for compatibility with new logger system
 def log_info(message, **kwargs):
@@ -70,9 +79,23 @@ def getLogCsvPath():
     return os.path.join(folder, f"{day}.csv")
 
 def ensureCsvHeader(path):
+    """Ensure CSV header exists with error handling"""
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
-        with open(path, 'a', encoding='utf-8-sig') as f:
-            f.write("fecha,hora,funcion,par,mensaje\n")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with open(path, 'a', encoding='utf-8-sig') as f:
+                    f.write("fecha,hora,funcion,par,mensaje\n")
+                break
+            except PermissionError:
+                if attempt < max_retries - 1:
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                else:
+                    # If header creation fails, the main write will handle fallback
+                    pass
+            except Exception:
+                break  # Other errors, continue
 
 
 
@@ -189,8 +212,49 @@ def messages(text, console=1, log=1, telegram=0, caption=None, pair=None):
         logline = f"{fecha},{hora},{funcion_clean},{par_clean},{msg_clean}\n"
         log_path = getLogCsvPath()
         ensureCsvHeader(log_path)
-        with open(log_path, 'a', encoding='utf-8-sig') as f:
-            f.write(logline)
+        
+        # Try to write to log with improved error handling
+        max_retries = 3
+        
+        # Check if file is in use before attempting to write
+        if isFileInUse(log_path):
+            # File is in use, wait a bit and try fallback if still blocked
+            time.sleep(0.2)
+            if isFileInUse(log_path):
+                try:
+                    fallback_path = log_path.replace('.csv', '_busy.csv')
+                    with open(fallback_path, 'a', encoding='utf-8-sig') as f:
+                        f.write(f"BUSY LOG - {logline}")
+                    return  # Exit early if fallback succeeds
+                except:
+                    pass
+        
+        for attempt in range(max_retries):
+            try:
+                with open(log_path, 'a', encoding='utf-8-sig') as f:
+                    f.write(logline)
+                break  # Success, exit retry loop
+            except PermissionError as e:
+                if attempt < max_retries - 1:
+                    time.sleep(0.1 * (attempt + 1))  # Progressive delay
+                    continue
+                else:
+                    # Last attempt failed, try fallback
+                    try:
+                        fallback_path = log_path.replace('.csv', '_fallback.csv')
+                        with open(fallback_path, 'a', encoding='utf-8-sig') as f:
+                            f.write(f"PERMISSION ERROR - {logline}")
+                    except:
+                        pass  # If even fallback fails, continue silently
+            except Exception as e:
+                # Other errors, try once more with fallback
+                try:
+                    fallback_path = log_path.replace('.csv', '_error.csv')
+                    with open(fallback_path, 'a', encoding='utf-8-sig') as f:
+                        f.write(f"GENERAL ERROR ({str(e)}) - {logline}")
+                except:
+                    pass
+                break
     if telegram:
         '''
         0: no envía nada por Telegram
