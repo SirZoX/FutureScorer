@@ -11,6 +11,7 @@ from logManager import messages
 from exceptions import DataValidationError, ExchangeConnectionError
 # from cacheManager import cachedCall, cacheManager  # REMOVED - no longer needed
 import pandas as pd
+import args  # Import command line arguments
 
 
 from datetime import datetime, UTC
@@ -904,7 +905,7 @@ def analyzePairs():
     messages(f"Analysis phase completed. Elapsed: {analysisElapsed:.2f}s", console=1, log=1, telegram=0)
     
     # 9) Generate plots for all opportunities asynchronously (non-blocking)
-    if hasattr(analyzePairs, '_plotData') and analyzePairs._plotData:
+    if args.generatePlots and hasattr(analyzePairs, '_plotData') and analyzePairs._plotData:
         def generatePlotsAsync():
             import threading
             plotCount = len(analyzePairs._plotData)
@@ -926,6 +927,10 @@ def analyzePairs():
         plotThread = threading.Thread(target=generatePlotsAsync, daemon=True)
         plotThread.start()
         messages("Plot generation started in background thread", console=0, log=1, telegram=0)
+    elif not args.generatePlots and hasattr(analyzePairs, '_plotData') and analyzePairs._plotData:
+        # Clear plot data if plots are disabled
+        analyzePairs._plotData = []
+        messages("Plot generation disabled by -plots argument", console=0, log=1, telegram=0)
     
     # ——— NEW: EXECUTION PHASE - Process approved opportunities sequentially ———
     if approvedOpportunities:

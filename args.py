@@ -8,8 +8,11 @@ import sys
 
 isSandbox = False
 isForce = False
+generatePlots = False
 
 if '-test' in sys.argv:
     isSandbox = True
 if '-force' in sys.argv:
     isForce = True
+if '-plots' in sys.argv:
+    generatePlots = True

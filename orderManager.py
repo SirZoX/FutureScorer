@@ -6,6 +6,7 @@ import csv
 import time
 import threading
 from datetime import datetime
+import args  # Import command line arguments
 
 from logManager import messages
 from gvars import configFile, positionsFile, dailyBalanceFile, marketsFile, selectionLogFile, csvFolder, tradesLogFile
@@ -841,25 +842,30 @@ class OrderManager:
             slope = record.get('slope', 0)
             intercept = record.get('intercept', 0)
             oppData = record.get('opp', {}) if 'opp' in record else {}
-            item = {
-                'csvPath': csv_path,
-                'pair': base_ticker,
-                'slope': slope,
-                'intercept': intercept,
-                'minPctBounceAllowed': float(self.config.get('minPctBounceAllowed', 0.003)),
-                'maxPctBounceAllowed': float(self.config.get('maxPctBounceAllowed', 0.09)),
-                'tpPrice': record.get('tpPrice'),
-                'slPrice': record.get('slPrice'),
-                'ma99': oppData.get('ma99'),
-                'momentum': oppData.get('momentum'),
-                'distance': oppData.get('distancePct'),
-                'touches': oppData.get('touchesCount'),
-                'volume': oppData.get('volumeRatio'),
-                'score': oppData.get('score')
-            }
-            plot_path = savePlot(item)
-            # Plot will be sent by pairs.py, no need to send it here again
-            messages(f"Plot generated for {symbol}: {plot_path}", pair=symbol, console=0, log=1, telegram=0)
+            
+            # Generate plot only if enabled
+            if args.generatePlots:
+                item = {
+                    'csvPath': csv_path,
+                    'pair': base_ticker,
+                    'slope': slope,
+                    'intercept': intercept,
+                    'minPctBounceAllowed': float(self.config.get('minPctBounceAllowed', 0.003)),
+                    'maxPctBounceAllowed': float(self.config.get('maxPctBounceAllowed', 0.09)),
+                    'tpPrice': record.get('tpPrice'),
+                    'slPrice': record.get('slPrice'),
+                    'ma99': oppData.get('ma99'),
+                    'momentum': oppData.get('momentum'),
+                    'distance': oppData.get('distancePct'),
+                    'touches': oppData.get('touchesCount'),
+                    'volume': oppData.get('volumeRatio'),
+                    'score': oppData.get('score')
+                }
+                plot_path = savePlot(item)
+                # Plot will be sent by pairs.py, no need to send it here again
+                messages(f"Plot generated for {symbol}: {plot_path}", pair=symbol, console=0, log=1, telegram=0)
+            else:
+                messages(f"Plot generation disabled for {symbol}", pair=symbol, console=0, log=1, telegram=0)
         except Exception as e:
             messages(f"[ERROR] No se pudo generar el plot para {symbol}: {e}", pair=symbol, console=1, log=1, telegram=0)
         self.savePositions()
