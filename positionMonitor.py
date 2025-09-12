@@ -310,10 +310,38 @@ def checkOrderStatusPeriodically():
                 positionsUpdated = True
                 
                 messages(f"[ORDER-CHECK] Position {symbol} marked as closed ({pos['close_reason']})", console=0, log=1, telegram=0)
+            
+            # Check if both orders are canceled (manually canceled positions)
+            elif tpStatus == 'canceled' and slStatus == 'canceled':
+                # Both orders canceled - remove position from JSON silently
+                messages(f"[ORDER-CHECK] Both TP and SL orders for {symbol} are canceled - removing from positions", console=0, log=1, telegram=0)
+                # Mark for removal (we'll remove after iteration to avoid dict change during iteration)
+                if not hasattr(checkOrderStatusPeriodically, '_positions_to_remove'):
+                    checkOrderStatusPeriodically._positions_to_remove = []
+                checkOrderStatusPeriodically._positions_to_remove.append(symbol)
+                positionsUpdated = True
+            
+            # Also check mixed cases: one canceled + one failed to check or doesn't exist
+            elif (tpStatus == 'canceled' and slStatus is None) or (slStatus == 'canceled' and tpStatus is None):
+                # One order canceled and the other couldn't be found - likely manually removed
+                messages(f"[ORDER-CHECK] Mixed status for {symbol} (TP: {tpStatus}, SL: {slStatus}) - likely manually canceled, removing from positions", console=0, log=1, telegram=0)
+                if not hasattr(checkOrderStatusPeriodically, '_positions_to_remove'):
+                    checkOrderStatusPeriodically._positions_to_remove = []
+                checkOrderStatusPeriodically._positions_to_remove.append(symbol)
+                positionsUpdated = True
         
         except Exception as e:
             messages(f"[ORDER-CHECK] Error processing {symbol}: {e}", console=0, log=1, telegram=0)
             continue
+    
+    # Remove positions marked for deletion (canceled orders)
+    if hasattr(checkOrderStatusPeriodically, '_positions_to_remove'):
+        for symbol_to_remove in checkOrderStatusPeriodically._positions_to_remove:
+            if symbol_to_remove in positions:
+                del positions[symbol_to_remove]
+                messages(f"[ORDER-CHECK] Removed position {symbol_to_remove} from openedPositions.json (manually canceled orders)", console=0, log=1, telegram=0)
+        # Clear the removal list
+        checkOrderStatusPeriodically._positions_to_remove = []
     
     # Save updated positions if any changes were made
     if positionsUpdated:
